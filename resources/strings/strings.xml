@@ -1,0 +1,7 @@
+<strings>
+    <string id="AppName">Rossonero</string>
+
+    <!-- Fixed dark stripe palette, no color-theme setting - same reasoning
+         as Arctic Peak's strings.xml. -->
+    <string id="SettingShowSeconds">Show seconds (high-power mode only)</string>
+</strings>

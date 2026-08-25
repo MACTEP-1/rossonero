@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Rossonero - Connect IQ watch face manifest
+
+  Store-submittable: this build is deliberately just the red/black color
+  scheme (Italian "rossonero" = "red-black", a generic color name, not the
+  club's crest or wordmark). See README.md for the reasoning and how this
+  differs from the milan-personal project.
+
+  NOTE ON DEVICE IDS: same caveat as Ritmo's manifest - refresh this list
+  via "Monkey C: Edit Products" before your first build.
+-->
+<iq:manifest version="3" xmlns:iq="http://www.garmin.com/xml/connectiq">
+  <iq:application
+    id="1ddb190f-7f3e-4d09-a35e-66f8563479f7"
+    type="watchface"
+    name="@Strings.AppName"
+    entry="RossoneroApp"
+    launcherIcon="@Drawables.LauncherIcon"
+    minApiLevel="3.3.0">
+
+    <iq:products>
+      <iq:product id="venu2"/>
+      <iq:product id="venu2s"/>
+      <iq:product id="vivoactive4"/>
+      <iq:product id="vivoactive5"/>
+      <iq:product id="fenix7"/>
+      <iq:product id="fenix7s"/>
+      <iq:product id="fenix7x"/>
+      <iq:product id="epix2"/>
+      <iq:product id="fr265"/>
+      <iq:product id="fr265s"/>
+      <iq:product id="fr965"/>
+    </iq:products>
+
+    <!-- No permissions needed: no auto theme, no SensorHistory field, no
+         networking. -->
+
+    <iq:languages>
+      <iq:language>eng</iq:language>
+    </iq:languages>
+
+    <iq:barrels/>
+  </iq:application>
+</iq:manifest>
