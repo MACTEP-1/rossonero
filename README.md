@@ -12,6 +12,107 @@ projects in this set: written without access to the SDK compiler or a
 real/simulated device - treat as a carefully-reasoned first draft, not
 tested software.
 
+## Ninth round: user-selectable stat-badge data, plus a world clock
+
+You asked for the 3 stat circles to be customizable, and floated a
+secondary screen as an option "if it's too hard" - otherwise just
+settings. A quick look at Connect IQ's watch-face touch/tap support
+didn't turn up a clean path to a second screen for a always-on watch
+face without meaningfully more risk in code I can't compile-test, so per
+your own stated fallback this went the settings route instead: each of
+the 3 circles is now independently configurable in Settings (Left/
+Middle/Right circle shows...) rather than fixed to steps/heart rate/
+calories. Defaults are still steps/heart rate/calories, so an existing
+install looks identical until you actually open Settings.
+
+New options beyond the original three: distance (today, converts to km
+or mi from your device's unit setting), floors climbed, active minutes,
+battery %, stress score, temperature, and a world clock. Two of those are
+worth flagging honestly rather than presenting as sure things, since none
+of this has run on a real device or simulator:
+
+- **Temperature** is not a physical sensor on any of these watches - it
+  comes from `Weather.getCurrentConditions()`, which needs a Bluetooth-
+  connected phone running Connect. **Correction, confirmed against a real
+  compiler run:** the manifest originally declared a `Weather` permission,
+  guessed from Garmin's usual module-name convention since I couldn't
+  fully verify it from this sandbox - and monkeybrains rejected it outright
+  ("Invalid permission provided: Weather") the first time you actually
+  built this. Checked Garmin's actual `Toybox.Weather`/`CurrentConditions`
+  docs afterward: no permission is needed at all for `.temperature` (the
+  field this code reads) - the only fields that need a permission are
+  `observationLocationPosition`/`observationLocationName`, which need
+  `Positioning` instead. The `<iq:permissions>` block is removed from
+  `manifest.xml` entirely now. No phone connected, and the field falls
+  back to "--" rather than crashing.
+- **World clock** is a fixed whole-hour UTC offset (new "World Clock
+  Offset" setting, -12 to +14), not a real timezone lookup - Monkey C has
+  no on-device timezone database, so there's no way to do automatic DST
+  or half-hour-offset zones (India, Nepal, etc.) without one. If you
+  pick, say, "UTC-5 (New York)" it'll drift an hour off during whichever
+  side of DST New York isn't currently observing, until you manually
+  change the offset.
+
+New tiny icons for each of the new fields (distance arrow, stair-step
+floors, stopwatch, zigzag stress line, thermometer, clock-face) were
+prototyped in Python at the actual ~18px on-screen badge size before
+being ported to Monkey C vector code, same verification habit as the
+earlier icon rounds - see `tools/` if you want to see the mockups. Battery
+reuses the existing battery icon rather than a new one.
+
+## Eighth round: walking back the tick-ring gap - it's not needed anymore
+
+You flagged that the hash marks at the bottom of the ring were missing.
+That's a real regression I introduced myself: the "gap in the ring for
+the battery" fix from the sixth round (below) was correct *at the time*,
+when `BATTERY_Y` was 0.925 and there genuinely wasn't room. But the very
+next round moved `BATTERY_Y` up to 0.875 to fix a different overlap (the
+stat badges against the tick ring), and I never went back and checked
+whether the now-redundant gap-in-the-ring exclusion was still needed. It
+wasn't - at `BATTERY_Y=0.875` the battery row's bottom edge sits at
+roughly y=0.90, a full ~0.025 above the bottom major tick's inner edge
+(~0.928), so the exclusion was just removing real tick marks for no
+reason. Removed the exclusion entirely; the ring draws all the way around
+again. Checked this with a rendered mockup (battery box vs. tick
+positions, not just the arithmetic) before shipping - same technique as
+the original gap fix.
+
+This is the same "recheck everything downstream of a change" lesson from
+earlier rounds, just caught a round late and in the opposite direction -
+worth being upfront about that rather than glossing over it.
+
+## Seventh round: long step counts could overflow a badge
+
+Caught on milan-personal's screenshot, but applies here too since the
+badge-drawing code is identical: once `formatSteps()` switches to
+"12.3K"-style text (anything >= 1000 steps), that string runs meaningfully
+wider than a bare "0" or "80", and the badge text was always drawn at a
+fixed font size regardless of how long it actually was. Fixed by
+measuring the rendered text width at runtime and dropping to a smaller
+font (`FONT_XTINY`) if the normal one (`FONT_TINY`) would run wider than
+the badge can actually hold, instead of guessing at a length threshold
+that might not hold up for every locale's number formatting.
+
+Rossonero's badges don't have the tick-ring overlap milan-personal had
+(checked the numbers - this project's `STATS_Y`/`STATS_RADIUS` keep the
+badges comfortably inside the ring, margin ~0.022), so no layout changes
+needed here this round, just the font fix.
+
+## Sixth round: gap in the tick ring for the battery
+
+Confirmed (via the same bug on milan-personal's screenshot) that the
+perimeter tick ring's long "major" tick at exactly 90 degrees - straight
+down - reaches deep enough to sit right behind the battery readout. Since
+you said Rossonero itself "looks good," this hadn't been reported here
+specifically, but the tick ring code and `BATTERY_Y` are the same in both
+projects, so it's very likely present here too, just not looked at
+closely. Rather than shrink the battery row or fight for a gap that
+mostly isn't there between the badges and that tick, `drawPerimeterTicks`
+now skips a small window of ticks (65-115 degrees) around the bottom,
+opening a real gap in the ring for the battery to sit in - checked the
+geometry with a quick script before shipping this one, not just paper
+math. `BATTERY_Y` itself is unchanged.
+
 ## Fifth round: the ball is now a bitmap, not hand-drawn Monkey C
 
 Three straight rounds of hand-coded vector pentagons all looked wrong

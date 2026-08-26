@@ -8,6 +8,7 @@ using Toybox.Time.Gregorian;
 using Toybox.Application.Properties;
 using Toybox.Timer;
 using Toybox.Math;
+using Toybox.Weather;
 
 //
 // RossoneroView.mc - draws the whole watch face.
@@ -80,6 +81,22 @@ class RossoneroView extends WatchUi.WatchFace {
     const FG = 0xf5f5f5;
     const DIM = 0xd8b8b8;
     const ACCENT = 0xe23b3b;
+
+    // Selectable stat-badge fields - numeric IDs match the Field1/Field2/
+    // Field3 settings.xml list values exactly, so don't renumber these
+    // without updating settings.xml/strings.xml to match. Same feature/IDs
+    // as santorini-sunset - see that project's SantoriniSunsetView.mc for
+    // the fuller comments on each field's reasoning.
+    const FIELD_STEPS = 0;
+    const FIELD_HEART = 1;
+    const FIELD_CALORIES = 2;
+    const FIELD_DISTANCE = 3;
+    const FIELD_FLOORS = 4;
+    const FIELD_ACTIVE_MIN = 5;
+    const FIELD_BATTERY = 6;
+    const FIELD_STRESS = 7;
+    const FIELD_TEMPERATURE = 8;
+    const FIELD_WORLD_CLOCK = 9;
 
     function initialize() {
         WatchFace.initialize();
@@ -202,6 +219,17 @@ class RossoneroView extends WatchUi.WatchFace {
 
         for (var i = 0; i < TICK_COUNT; i += 1) {
             var angleDeg = i * (360.0 / TICK_COUNT);
+
+            // Used to skip a window of ticks around the bottom here to
+            // dodge the battery readout - that was needed back when
+            // BATTERY_Y was 0.925, but BATTERY_Y moved up to 0.875 in a
+            // later round (to match milan-personal's tick-ring/badge
+            // overlap fix) and nobody re-checked whether the exclusion
+            // was still necessary. It wasn't: the battery row's bottom
+            // edge now sits at roughly y=0.90, a clear ~0.03 above the
+            // major tick's inner edge (~0.928), so the full ring draws
+            // again.
+
             var rad = Math.toRadians(angleDeg);
             var cosA = Math.cos(rad);
             var sinA = Math.sin(rad);
@@ -307,21 +335,102 @@ class RossoneroView extends WatchUi.WatchFace {
 
     // ---- Stats: fixed steps / heart rate / calories badges -----------------
 
+    // Used to be fixed steps/heart rate/calories. Each of the three
+    // circles now independently shows whatever FIELD_* the user picked in
+    // Settings (defaults are still steps/heart rate/calories, so an
+    // existing install that hasn't touched Settings looks identical to
+    // before this change).
     function drawStats(dc as Graphics.Dc, w as Lang.Number, h as Lang.Number) as Void {
         var info = ActivityMonitor.getInfo();
-        var steps = (info.steps != null) ? info.steps : 0;
-        var calories = (info.calories != null) ? info.calories : 0;
-        var hr = readHeartRate();
-        var hrText = (hr != null) ? hr.format("%d") : "--";
+
+        var field1 = Properties.getValue("Field1") as Lang.Number?;
+        var field2 = Properties.getValue("Field2") as Lang.Number?;
+        var field3 = Properties.getValue("Field3") as Lang.Number?;
+        if (field1 == null) { field1 = FIELD_STEPS; }
+        if (field2 == null) { field2 = FIELD_HEART; }
+        if (field3 == null) { field3 = FIELD_CALORIES; }
 
         var cy = h * STATS_Y;
         var r = w * STATS_RADIUS;
         var spacing = w * STATS_SPACING;
         var cxMid = w * 0.5;
 
-        drawStatBadge(dc, cxMid - spacing, cy, r, :steps, formatSteps(steps));
-        drawStatBadge(dc, cxMid, cy, r, :heart, hrText);
-        drawStatBadge(dc, cxMid + spacing, cy, r, :flame, calories.format("%d"));
+        drawStatBadge(dc, cxMid - spacing, cy, r, field1, fieldText(field1, info));
+        drawStatBadge(dc, cxMid, cy, r, field2, fieldText(field2, info));
+        drawStatBadge(dc, cxMid + spacing, cy, r, field3, fieldText(field3, info));
+    }
+
+    // Text for one FIELD_* id. info is the shared ActivityMonitor.getInfo()
+    // snapshot from drawStats() - passed in rather than re-fetched per
+    // field so all three badges reflect the exact same instant.
+    function fieldText(fieldId as Lang.Number, info as ActivityMonitor.Info) as Lang.String {
+        if (fieldId == FIELD_HEART) {
+            var hr = readHeartRate();
+            return (hr != null) ? hr.format("%d") : "--";
+        } else if (fieldId == FIELD_CALORIES) {
+            var cal = (info.calories != null) ? info.calories : 0;
+            return cal.format("%d");
+        } else if (fieldId == FIELD_DISTANCE) {
+            // Info.distance is centimeters since midnight - convert to the
+            // device's configured unit.
+            var distCm = (info.distance != null) ? info.distance : 0;
+            if (System.getDeviceSettings().distanceUnits == System.UNIT_METRIC) {
+                return (distCm / 100000.0).format("%.1f") + "km";
+            }
+            return (distCm / 160934.4).format("%.1f") + "mi";
+        } else if (fieldId == FIELD_FLOORS) {
+            var floors = (info.floorsClimbed != null) ? info.floorsClimbed : 0;
+            return floors.format("%d");
+        } else if (fieldId == FIELD_ACTIVE_MIN) {
+            var mins = 0;
+            if (info.activeMinutesDay != null) {
+                mins = info.activeMinutesDay.total;
+            }
+            return mins.format("%d") + "m";
+        } else if (fieldId == FIELD_BATTERY) {
+            return System.getSystemStats().battery.format("%d") + "%";
+        } else if (fieldId == FIELD_STRESS) {
+            var stress = info.stressScore;
+            return (stress != null) ? stress.format("%d") : "--";
+        } else if (fieldId == FIELD_TEMPERATURE) {
+            return temperatureText();
+        } else if (fieldId == FIELD_WORLD_CLOCK) {
+            return worldClockText();
+        }
+        // FIELD_STEPS, and the fallback for any unrecognized value.
+        var steps = (info.steps != null) ? info.steps : 0;
+        return formatSteps(steps);
+    }
+
+    // Ambient temperature via the connected phone's weather data - NOT a
+    // physical sensor on this device. Needs a Bluetooth-connected phone
+    // with the Connect app and (per manifest.xml) the Weather permission,
+    // and can legitimately come back null. Falls back to "--".
+    function temperatureText() as Lang.String {
+        var conditions = (Toybox has :Weather) ? Weather.getCurrentConditions() : null;
+        if (conditions == null || conditions.temperature == null) {
+            return "--";
+        }
+        var celsius = conditions.temperature;
+        var metric = (System.getDeviceSettings().temperatureUnits == System.UNIT_METRIC);
+        var value = metric ? celsius : (celsius * 9.0 / 5.0 + 32.0);
+        return value.format("%d") + "°";
+    }
+
+    // A second timezone as a fixed UTC-offset-in-hours clock (Settings >
+    // World Clock Offset), not a real timezone/DST lookup - Monkey C has
+    // no on-device timezone database. Whole-hour offsets only.
+    function worldClockText() as Lang.String {
+        var offsetHours = Properties.getValue("WorldClockOffset") as Lang.Number?;
+        if (offsetHours == null) { offsetHours = 0; }
+        var shifted = Time.now().add(new Time.Duration(offsetHours * 3600));
+        var wcInfo = Gregorian.utcInfo(shifted, Time.FORMAT_SHORT);
+        var hour = wcInfo.hour;
+        if (!System.getDeviceSettings().is24Hour) {
+            hour = hour % 12;
+            if (hour == 0) { hour = 12; }
+        }
+        return hour.format("%02d") + ":" + wcInfo.min.format("%02d");
     }
 
     function formatSteps(steps as Lang.Number) as Lang.String {
@@ -343,7 +452,7 @@ class RossoneroView extends WatchUi.WatchFace {
     // regardless of actual font height, so this doesn't depend on
     // guessing a pixel height at all. Icon and number are now placed
     // symmetrically above/below the badge's vertical center instead.
-    function drawStatBadge(dc as Graphics.Dc, cx as Lang.Float, cy as Lang.Float, r as Lang.Float, icon as Lang.Symbol, text as Lang.String) as Void {
+    function drawStatBadge(dc as Graphics.Dc, cx as Lang.Float, cy as Lang.Float, r as Lang.Float, fieldId as Lang.Number, text as Lang.String) as Void {
         dc.setColor(0x1a0000, Graphics.COLOR_TRANSPARENT);
         dc.fillCircle(cx, cy, r);
         dc.setColor(ACCENT, Graphics.COLOR_TRANSPARENT);
@@ -352,16 +461,45 @@ class RossoneroView extends WatchUi.WatchFace {
 
         var iconSize = r * 0.42;
         var iconTopY = cy - r * 0.62;
-        if (icon == :steps) {
-            Icons.drawSteps(dc, cx - iconSize * 0.5, iconTopY, iconSize, ACCENT);
-        } else if (icon == :heart) {
-            Icons.drawHeart(dc, cx - iconSize * 0.5, iconTopY, iconSize, ACCENT);
-        } else if (icon == :flame) {
-            Icons.drawFlame(dc, cx - iconSize * 0.5, iconTopY, iconSize, ACCENT);
+        var iconX = cx - iconSize * 0.5;
+        if (fieldId == FIELD_HEART) {
+            Icons.drawHeart(dc, iconX, iconTopY, iconSize, ACCENT);
+        } else if (fieldId == FIELD_CALORIES) {
+            Icons.drawFlame(dc, iconX, iconTopY, iconSize, ACCENT);
+        } else if (fieldId == FIELD_DISTANCE) {
+            Icons.drawDistance(dc, iconX, iconTopY, iconSize, ACCENT);
+        } else if (fieldId == FIELD_FLOORS) {
+            Icons.drawFloors(dc, iconX, iconTopY, iconSize, ACCENT);
+        } else if (fieldId == FIELD_ACTIVE_MIN) {
+            Icons.drawActiveMinutes(dc, iconX, iconTopY, iconSize, ACCENT);
+        } else if (fieldId == FIELD_BATTERY) {
+            var pct = System.getSystemStats().battery;
+            Icons.drawBattery(dc, iconX, iconTopY + iconSize * 0.25, iconSize, pct, ACCENT, ACCENT);
+        } else if (fieldId == FIELD_STRESS) {
+            Icons.drawStress(dc, iconX, iconTopY, iconSize, ACCENT);
+        } else if (fieldId == FIELD_TEMPERATURE) {
+            Icons.drawTemperature(dc, iconX, iconTopY, iconSize, ACCENT);
+        } else if (fieldId == FIELD_WORLD_CLOCK) {
+            Icons.drawWorldClock(dc, iconX, iconTopY, iconSize, ACCENT);
+        } else {
+            Icons.drawSteps(dc, iconX, iconTopY, iconSize, ACCENT);
+        }
+
+        // FIX: steps can go well past 3 digits, and once formatSteps()
+        // switches to "12.3K"-style text it's noticeably wider than a
+        // bare "0" or "80" - never checked against how much horizontal
+        // room this small a badge actually has. Measure the actual
+        // rendered width at runtime and drop to a smaller font if
+        // FONT_TINY would run wider than the badge's chord width at this
+        // text row (r * 1.7, leaving a little padding inside the circle).
+        var textFont = Graphics.FONT_TINY;
+        var maxTextWidth = r * 1.7;
+        if (dc.getTextWidthInPixels(text, textFont) > maxTextWidth) {
+            textFont = Graphics.FONT_XTINY;
         }
 
         dc.setColor(FG, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx, cy + r * 0.28, Graphics.FONT_TINY, text,
+        dc.drawText(cx, cy + r * 0.28, textFont, text,
             Graphics.TEXT_JUSTIFY_CENTER + Graphics.TEXT_JUSTIFY_VCENTER);
     }
 
