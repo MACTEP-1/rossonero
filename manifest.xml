@@ -17,7 +17,12 @@
     name="@Strings.AppName"
     entry="RossoneroApp"
     launcherIcon="@Drawables.LauncherIcon"
-    minApiLevel="3.3.0">
+    minApiLevel="4.0.0">
+    <!-- Bumped from 3.3.0: the top-of-face soccer ball is now a bitmap
+         resource drawn with Dc.drawScaledBitmap (API 4.0.0), replacing
+         the hand-drawn vector version - see README.md. Every device in
+         the product list below is already CIQ4+, so this doesn't drop
+         support for any of them. -->
 
     <iq:products>
       <iq:product id="venu2"/>

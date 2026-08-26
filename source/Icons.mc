@@ -1,6 +1,5 @@
 using Toybox.Graphics;
 using Toybox.Lang;
-using Toybox.Math;
 
 //
 // Icons.mc - small vector icons drawn with basic Graphics.Dc primitives only.
@@ -66,4 +65,12 @@ module Icons {
             [x + size * 0.22, y + size * 0.42]
         ]);
     }
+
+    // drawSoccerBall() removed: after three rounds of this hand-drawn
+    // vector version all looking wrong once actually rendered (a flower,
+    // a pinwheel, then something that read as a spider), the ball is now
+    // a rasterized bitmap resource instead
+    // (resources/drawables/soccer_ball.png, generated and visually
+    // checked ahead of time by tools/gen_soccer_ball.py - see
+    // RossoneroView.mc's drawTopIcon() and README.md).
 }
