@@ -12,6 +12,107 @@ projects in this set: written without access to the SDK compiler or a
 real/simulated device - treat as a carefully-reasoned first draft, not
 tested software.
 
+## Fifteenth round: seconds hand, move bar, sunrise/sunset, steps ring
+
+You asked for five things; four are new, one (stress) turned out to
+already be there - `FIELD_STRESS` has been a selectable stat-badge field
+since the Ninth round, reading `ActivityMonitor.Info.stressScore`
+directly. Nothing to add for it, just worth knowing before you go
+looking for it in Settings.
+
+**Seconds hand (Analog only, awake only).** Reuses this project's
+existing 1Hz `_tickTimer` - it already fires every second whenever awake
+(originally for the digital mode's blinking-colon "Show Seconds" option),
+so a smoothly-moving seconds hand needed no new timer. Same tapered
+`drawHandPolygon` shape as the hour/minute hands but much thinner
+(half-width 0.006 vs the minute hand's 0.015) with a small accent-colored
+tip/tail, drawn and hub-capped last so it sits on top of the other two.
+Checked via a new PIL mockup (`verify/step_ring_color_*.png`, drawn at
+10:24:38) that the thinness alone reads as clearly distinct from the two
+thicker hands without needing a different color.
+
+**Move bar (new selectable field, id 10).** Garmin's own inactivity nudge
+- `ActivityMonitor.Info.moveBarLevel`, confirmed against Garmin's API docs
+as a real property with `MOVE_BAR_LEVEL_MIN=0`/`MOVE_BAR_LEVEL_MAX=5`.
+Shown as "N/5" in the badge (0 = rested, 5 = Garmin's own max before its
+on-device alert) with a small 5-bar chart icon, filled up to the current
+level.
+
+**Sunrise / Sunset (new selectable fields, ids 11/12) - the least certain
+thing in this round.** `Weather.getSunrise()`/`getSunset()` are real
+Garmin API (3.3.0+, confirmed against Toybox.Weather's own docs - not the
+"no API for this" answer an older Garmin forum thread gives, which
+predates these two methods), but both need a `Position.Location`, and a
+watch face doesn't have a live GPS session to get one from cleanly.
+`sunLocation()` tries `Activity.Info.currentLocation` first (a real forum
+thread quotes Garmin's own docs describing this as available to watch
+faces for a last-known location, though developers in that same thread
+report it's inconsistent across devices/firmware), then falls back to
+`Weather.CurrentConditions.observationLocationPosition` (the phone-synced
+weather station's location, already used for the Temperature field).
+Both need this round's new `Positioning` permission (see manifest.xml).
+If neither location source comes back with anything, or the phone isn't
+connected, both fields fall back to "--" rather than guessing - the same
+pattern Temperature and World Clock already use. **Please check this one
+specifically once you build** - it's the one piece of this round I have
+the least confidence will resolve to a real time on your actual device.
+
+**This round's first permission request.** Adding Sunrise/Sunset means
+this Store-submittable app now declares `<iq:uses-permission
+id="Positioning"/>` in manifest.xml - every previous round of this
+project requested nothing. If you do submit this to the Store, both
+Garmin's review and the install prompt surface requested permissions, so
+it's worth knowing this isn't a silent addition.
+
+**Steps-progress ring (Digital clock style only).** A second, inner ring
+at radius 0.43 - green ticks for the completed fraction of
+`steps`/`stepGoal`, a dark track for the rest - toggleable via the new
+"Show step-goal ring" setting (default on). Deliberately Digital-only:
+Analog mode already has the perimeter tick ring, the hour-number ring,
+and now a seconds hand all sharing the narrow band between the stat
+badges (~0.41 from center) and the hour-number ring (0.46); a mockup at
+the only radius that fit between them read as a slightly thicker copy of
+the existing tick ring, not a distinct progress indicator
+(`verify/step_ring_debug_*.png`). Digital mode has the same gap free of
+hour numbers, so the ring reads cleanly there
+(`verify/step_ring_color_{low,mid,goal}.png`). Green rather than this
+project's own red is deliberate, for the same "needs to look different
+from the existing ring, not just be positioned differently" reason.
+Skipped entirely (not drawn) if the device doesn't report a step goal,
+rather than guessing a default one to show progress against.
+
+All four new icons (move bar's bar chart, the shared sunrise/sunset
+horizon-and-arrow glyph) were prototyped in Python at the real ~17px
+badge-icon size before being ported to Monkey C, same habit as every
+icon round before this one - see `verify/new_badge_fields.png` and
+`verify/sun_icons_v2_zoomed.png`. The first sunrise/sunset icon design
+(arrow stacked directly above the sun) was illegible at that size and
+was redrawn with the arrow beside the sun instead - kept both mockups
+around as a reminder of why.
+
+## Fourteenth round: stat badges lifted into a gentle arc
+
+You asked for the left/right circles to sit a little higher than the
+middle one, so the row reads "in concert with" the round bezel instead
+of looking like a flat line laid across it. Done: the outer two badges
+now sit `STATS_OUTER_LIFT` (0.035, about 15px on the Venu 2) higher than
+the middle one, which stays exactly where it was.
+
+Same lift in both Digital and Analog mode on purpose, even though what
+prompted this was how the row looked next to the round hour-number
+dial - a lift that only applied in Analog would mean the badges visibly
+jump position every time you switch Clock Style, which would look worse
+than the plain row it replaces. Checked via a PIL render (same approach
+as everything else touchy in this project) against both the digital
+`FONT_NUMBER_HOT` time and the new hour-number ring, at a few different
+lift amounts - turned out there was a lot more clearance in both
+directions than expected: the digital time's actual bottom edge sits
+well clear of where the badges start, and lifting the OUTER badges
+specifically moves them away from the 4/5/7/8 o'clock numbers (the
+tightest ones from the last round), not toward them. So the limit here
+was purely taste - how much lift still reads as "a little" rather than a
+dramatic rearrangement - not a collision risk.
+
 ## Thirteenth round: SettingsMenu.mc moved to a shared source folder
 
 You pointed out that this project and santorini-sunset are essentially

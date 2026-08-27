@@ -9,6 +9,8 @@ using Toybox.Application.Properties;
 using Toybox.Timer;
 using Toybox.Math;
 using Toybox.Weather;
+using Toybox.Activity;
+using Toybox.Position;
 
 //
 // RossoneroView.mc - draws the whole watch face.
@@ -66,6 +68,26 @@ class RossoneroView extends WatchUi.WatchFace {
     // gap above the bottom bezel than the last pass.
     const BATTERY_Y = 0.875;
 
+    // You asked for the left/right badges to sit a little higher than the
+    // middle one, so the row echoes the round bezel instead of reading as
+    // a flat line across it. The two outer badges get lifted by this many
+    // screen-heights; the middle one stays at STATS_Y. Deliberately the
+    // SAME in Digital and Analog mode - a lift that only applied to
+    // Analog would mean the badges visibly jump position when you toggle
+    // Clock Style, which is worse than the flat-row look this replaces.
+    // Picked via the same PIL-mockup check as everything else added this
+    // session: rendered the lifted row against both the digital
+    // FONT_NUMBER_HOT time and the new hour-number ring, at several lift
+    // values. Turned out there was a lot more headroom than expected in
+    // both directions - the digital time's actual bottom edge sits well
+    // above where the badges start, and lifting the OUTER badges moves
+    // them away from the tight 4/5/7/8 o'clock numbers (nowhere near the
+    // 1/2/10/11 numbers up near the icon) - so the limiting factor here
+    // was purely "how much before it stops looking like 'a little'," not
+    // a collision. 0.035 read as a clear, deliberate arc without looking
+    // like a mistake.
+    const STATS_OUTER_LIFT = 0.035;
+
     // Perimeter tick ring - same radius Ritmo's step-goal ring used
     // (0.46, proven to hug the bezel without clipping on a round display),
     // repurposed here as a static ring of tick marks instead of a
@@ -107,6 +129,37 @@ class RossoneroView extends WatchUi.WatchFace {
     const FIELD_STRESS = 7;
     const FIELD_TEMPERATURE = 8;
     const FIELD_WORLD_CLOCK = 9;
+    // Added in the "second hand / move bar / sunrise-sunset / step ring"
+    // round. FIELD_MOVE_BAR reads ActivityMonitor.Info.moveBarLevel
+    // directly (confirmed via Garmin's own API docs: MOVE_BAR_LEVEL_MIN=0,
+    // MOVE_BAR_LEVEL_MAX=5 - Garmin's move-bar/red-bar inactivity nudge,
+    // not steps). FIELD_SUNRISE/FIELD_SUNSET are the least certain of the
+    // four new things added this round - see sunriseText()/sunsetText()
+    // below for why.
+    const FIELD_MOVE_BAR = 10;
+    const FIELD_SUNRISE = 11;
+    const FIELD_SUNSET = 12;
+
+    // Steps-progress ring: a second, inner ring of ticks (green fill vs a
+    // dark unfilled track) showing steps/stepGoal. Digital clock style
+    // ONLY - deliberately not shown in Analog. Analog mode already has the
+    // perimeter tick ring, the hour-number ring, and now a seconds hand
+    // all fighting for room between the stat badges (reaching to about
+    // 0.41 from center at their outer corner) and the hour-number ring
+    // (0.46); a mockup at the only radius that fit between them (0.43)
+    // showed the new ring visually merging with the existing tick ring
+    // into what just read as "a slightly thicker ring", not a distinct
+    // progress indicator (verify/step_ring_debug_*.png). Digital mode has
+    // the same 0.41-0.46 gap free of hour numbers, so 0.43 there is
+    // genuinely uncluttered - verified in
+    // verify/step_ring_color_{low,mid,goal}.png. Green (not ACCENT red) is
+    // deliberate: reusing the dial's existing red would have the same
+    // "blends into the tick ring" problem the first color choice had.
+    const STEP_RING_RADIUS = 0.43;
+    const STEP_RING_TICK_LEN = 0.024;
+    const STEP_RING_SEGMENTS = 32;
+    const STEP_RING_GREEN = 0x3ddc84;
+    const STEP_RING_TRACK = 0x3a2a2a;
 
     function initialize() {
         WatchFace.initialize();
@@ -181,6 +234,7 @@ class RossoneroView extends WatchUi.WatchFace {
         if (awake) {
             drawStats(dc, w, h);
             drawBattery(dc, w, h);
+            drawStepRing(dc, w, h);
         } else {
             drawLowPowerStats(dc, w, h);
         }
@@ -405,6 +459,28 @@ class RossoneroView extends WatchUi.WatchFace {
         dc.setColor(accentColor, Graphics.COLOR_TRANSPARENT);
         drawHandPolygon(dc, cx, cy, minuteAngle, minLen, w * 0.015, minLen * 0.15);
 
+        // Seconds hand: awake-only (this project's 1Hz `_tickTimer` already
+        // fires every second whenever awake, for the digital mode's
+        // blinking-colon "Show Seconds" option - that same per-second
+        // onUpdate() is what lets a seconds hand move smoothly here without
+        // any new timer). Thin (half-width 0.006 vs the minute hand's
+        // 0.015) and a touch longer than the minute hand, with a small
+        // accent-colored tip and tail counterweight - the thinness alone
+        // reads as clearly distinct from the two thicker hands even in the
+        // same fgColor, verified in verify/step_ring_color_*.png (drawn
+        // there at 10:24:38).
+        if (awake) {
+            var secAngle = clockTime.sec * 6.0;
+            var secLen = w * 0.34;
+            var secRad = Math.toRadians(secAngle);
+            dc.setColor(fgColor, Graphics.COLOR_TRANSPARENT);
+            drawHandPolygon(dc, cx, cy, secAngle, secLen, w * 0.006, secLen * 0.25);
+            var tailX = cx - Math.sin(secRad) * secLen * 0.25;
+            var tailY = cy + Math.cos(secRad) * secLen * 0.25;
+            dc.setColor(accentColor, Graphics.COLOR_TRANSPARENT);
+            dc.fillCircle(tailX, tailY, w * 0.012);
+        }
+
         // Hub cap: filled center plus a thin outline ring in the other
         // hand's color - a small polish over the original plain fillCircle,
         // same idea as a real watch's center cap.
@@ -477,13 +553,14 @@ class RossoneroView extends WatchUi.WatchFace {
         if (field3 == null) { field3 = FIELD_CALORIES; }
 
         var cy = h * STATS_Y;
+        var cyOuter = cy - h * STATS_OUTER_LIFT;
         var r = w * STATS_RADIUS;
         var spacing = w * STATS_SPACING;
         var cxMid = w * 0.5;
 
-        drawStatBadge(dc, cxMid - spacing, cy, r, field1, fieldText(field1, info));
+        drawStatBadge(dc, cxMid - spacing, cyOuter, r, field1, fieldText(field1, info));
         drawStatBadge(dc, cxMid, cy, r, field2, fieldText(field2, info));
-        drawStatBadge(dc, cxMid + spacing, cy, r, field3, fieldText(field3, info));
+        drawStatBadge(dc, cxMid + spacing, cyOuter, r, field3, fieldText(field3, info));
     }
 
     // Text for one FIELD_* id. info is the shared ActivityMonitor.getInfo()
@@ -522,10 +599,148 @@ class RossoneroView extends WatchUi.WatchFace {
             return temperatureText();
         } else if (fieldId == FIELD_WORLD_CLOCK) {
             return worldClockText();
+        } else if (fieldId == FIELD_MOVE_BAR) {
+            return moveBarText(info);
+        } else if (fieldId == FIELD_SUNRISE) {
+            return sunriseText();
+        } else if (fieldId == FIELD_SUNSET) {
+            return sunsetText();
         }
         // FIELD_STEPS, and the fallback for any unrecognized value.
         var steps = (info.steps != null) ? info.steps : 0;
         return formatSteps(steps);
+    }
+
+    // Garmin's inactivity nudge (the "red bar"/move bar), 0-5
+    // (ActivityMonitor.MOVE_BAR_LEVEL_MIN/MAX) - 0 is rested, 5 is Garmin's
+    // own max before the on-device alert. Shown as "N/5" rather than a bare
+    // digit so it doesn't get read as a score to maximize - it's the
+    // opposite, you want this low.
+    function moveBarText(info as ActivityMonitor.Info) as Lang.String {
+        var level = (info.moveBarLevel != null) ? info.moveBarLevel : 0;
+        return level.format("%d") + "/5";
+    }
+
+    // Best-effort last-known location for the sunrise/sunset fields below.
+    // Tries Activity.Info.currentLocation first - a real forum thread
+    // (forums.garmin.com/developer/connect-iq/f/discussion/7210) quotes
+    // Garmin's own docs describing this as available to watch faces for a
+    // last-known location, though the same thread has developers reporting
+    // it's inconsistent across devices/firmware. Falls back to
+    // Weather.getCurrentConditions().observationLocationPosition - the
+    // phone-synced weather station's location, already used for
+    // temperatureText() above, which needs the same Positioning permission
+    // this now declares in manifest.xml. Returns null (not a guess) if
+    // neither is available - genuinely can happen with no phone paired or
+    // no location fix yet.
+    function sunLocation() as Position.Location? {
+        if ((Toybox has :Activity) && (Activity has :getActivityInfo)) {
+            var actInfo = Activity.getActivityInfo();
+            if (actInfo != null && actInfo.currentLocation != null) {
+                return actInfo.currentLocation;
+            }
+        }
+        if (Toybox has :Weather) {
+            var conditions = Weather.getCurrentConditions();
+            if (conditions != null && conditions.observationLocationPosition != null) {
+                return conditions.observationLocationPosition;
+            }
+        }
+        return null;
+    }
+
+    // Sunrise/sunset via Weather.getSunrise()/getSunset() (API 3.3.0+,
+    // comfortably under this project's 4.0.0 floor) - real Garmin API,
+    // confirmed against Toybox.Weather's docs, NOT the "no API for this"
+    // answer an older Garmin forum post gives (that post predates these two
+    // methods). The genuinely uncertain part is sunLocation() above, not
+    // this call - falls back to "--" the same way temperature/world clock
+    // already do if location or the sunrise/sunset call itself comes back
+    // null. Least field-tested of everything in this round - see README.
+    function sunriseText() as Lang.String {
+        var loc = sunLocation();
+        if (loc == null || !(Toybox has :Weather) || !(Weather has :getSunrise)) {
+            return "--";
+        }
+        var moment = Weather.getSunrise(loc, Time.now());
+        return sunMomentText(moment);
+    }
+
+    function sunsetText() as Lang.String {
+        var loc = sunLocation();
+        if (loc == null || !(Toybox has :Weather) || !(Weather has :getSunset)) {
+            return "--";
+        }
+        var moment = Weather.getSunset(loc, Time.now());
+        return sunMomentText(moment);
+    }
+
+    // Shared formatting for sunriseText()/sunsetText() - same is24Hour
+    // handling as worldClockText().
+    function sunMomentText(moment as Time.Moment?) as Lang.String {
+        if (moment == null) {
+            return "--";
+        }
+        var info = Gregorian.info(moment, Time.FORMAT_SHORT);
+        var hour = info.hour;
+        if (!System.getDeviceSettings().is24Hour) {
+            hour = hour % 12;
+            if (hour == 0) { hour = 12; }
+        }
+        return hour.format("%02d") + ":" + info.min.format("%02d");
+    }
+
+    // Steps-progress ring - see STEP_RING_* constants above for why this is
+    // Digital-only and why it's a separate ring rather than recoloring the
+    // existing perimeter ticks. Reuses the exact same clock-convention trig
+    // (dirX=sin, dirY=-cos, 0deg=12 o'clock, clockwise) as
+    // drawHandPolygon()/drawHourNumbers() above, not the perimeter tick
+    // ring's plain cos/sin (that ring is purely decorative, not clock- or
+    // progress-aligned) - deliberately reusing the convention already
+    // proven correct in a real build rather than introducing dc.drawArc()'s
+    // own separate angle convention (0deg=3 o'clock, counter-clockwise)
+    // untested.
+    function drawStepRing(dc as Graphics.Dc, w as Lang.Number, h as Lang.Number) as Void {
+        var clockStyle = Properties.getValue("ClockStyle") as Lang.Number?;
+        if (clockStyle != null && clockStyle == 1) {
+            return; // Analog - see the constant comment for why.
+        }
+        var showRing = Properties.getValue("ShowStepRing") as Lang.Boolean?;
+        if (showRing != null && !showRing) {
+            return;
+        }
+
+        var info = ActivityMonitor.getInfo();
+        var goal = (info.stepGoal != null) ? info.stepGoal : 0;
+        if (goal <= 0) {
+            return; // No goal set - nothing meaningful to show progress against.
+        }
+        var steps = (info.steps != null) ? info.steps : 0;
+        var progress = steps.toFloat() / goal;
+        if (progress > 1.0) { progress = 1.0; }
+
+        var cx = w * 0.5;
+        var cy = h * 0.5;
+        var r = w * STEP_RING_RADIUS;
+        var tickLen = w * STEP_RING_TICK_LEN;
+
+        var i = 0;
+        while (i < STEP_RING_SEGMENTS) {
+            var angleDeg = i * (360.0 / STEP_RING_SEGMENTS);
+            var filled = (i.toFloat() / STEP_RING_SEGMENTS) <= progress;
+            var rad = Math.toRadians(angleDeg);
+            var dirX = Math.sin(rad);
+            var dirY = -Math.cos(rad);
+            var outerX = cx + dirX * r;
+            var outerY = cy + dirY * r;
+            var innerX = cx + dirX * (r - tickLen);
+            var innerY = cy + dirY * (r - tickLen);
+
+            dc.setColor(filled ? STEP_RING_GREEN : STEP_RING_TRACK, Graphics.COLOR_TRANSPARENT);
+            dc.setPenWidth(filled ? 3 : 2);
+            dc.drawLine(innerX, innerY, outerX, outerY);
+            i += 1;
+        }
     }
 
     // Ambient temperature via the connected phone's weather data - NOT a
@@ -607,6 +822,14 @@ class RossoneroView extends WatchUi.WatchFace {
             Icons.drawTemperature(dc, iconX, iconTopY, iconSize, ACCENT);
         } else if (fieldId == FIELD_WORLD_CLOCK) {
             Icons.drawWorldClock(dc, iconX, iconTopY, iconSize, ACCENT);
+        } else if (fieldId == FIELD_MOVE_BAR) {
+            var info2 = ActivityMonitor.getInfo();
+            var level = (info2.moveBarLevel != null) ? info2.moveBarLevel : 0;
+            Icons.drawMoveBar(dc, iconX, iconTopY, iconSize, level, ACCENT);
+        } else if (fieldId == FIELD_SUNRISE) {
+            Icons.drawSunrise(dc, iconX, iconTopY, iconSize, ACCENT);
+        } else if (fieldId == FIELD_SUNSET) {
+            Icons.drawSunset(dc, iconX, iconTopY, iconSize, ACCENT);
         } else {
             Icons.drawSteps(dc, iconX, iconTopY, iconSize, ACCENT);
         }

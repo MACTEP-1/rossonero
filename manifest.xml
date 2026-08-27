@@ -38,18 +38,30 @@
       <iq:product id="fr965"/>
     </iq:products>
 
-    <!-- CORRECTED after a real compiler error: "Weather" is NOT a valid
-         permission id - monkeybrains rejected it outright ("Invalid
-         permission provided: Weather"). Turns out no permission is needed
-         at all for Weather.getCurrentConditions() - confirmed against
-         Garmin's Toybox.Weather/CurrentConditions API docs: the only
-         fields gated behind a permission are observationLocationPosition
-         and observationLocationName, which need "Positioning", and
-         temperatureText() (see RossoneroView.mc) only reads .temperature,
-         which isn't one of those. So the permissions block is removed
-         entirely rather than swapped to a different id. No other
-         permission is needed: no auto theme, no SensorHistory field, no
-         other networking. -->
+    <!-- Permission history: "Weather" was tried first and rejected by a
+         real compiler run ("Invalid permission provided: Weather") -
+         confirmed against Garmin's Toybox.Weather/CurrentConditions docs
+         that no permission at all is needed for .temperature specifically,
+         so the block was removed entirely rather than swapped to a
+         different id.
+
+         Positioning ADDED BACK in the "second hand / move bar /
+         sunrise-sunset / step ring" round: the new Sunrise/Sunset fields
+         call Weather.getSunrise()/getSunset(), which need a
+         Position.Location - both places RossoneroView.mc's sunLocation()
+         can get one from (Activity.Info.currentLocation,
+         Weather.CurrentConditions.observationLocationPosition) are
+         themselves gated behind this exact permission per their own API
+         docs. This is a real, user-visible change from every previous
+         round of this project: it's the first permission this
+         Store-submittable app has ever requested, worth being aware of if
+         you do submit it - Garmin Store review and the install prompt
+         both surface requested permissions. No other new permission is
+         needed for anything else in this round (move bar and the step
+         ring are both ActivityMonitor.Info, already unrestricted). -->
+    <iq:permissions>
+      <iq:uses-permission id="Positioning"/>
+    </iq:permissions>
 
     <iq:languages>
       <iq:language>eng</iq:language>

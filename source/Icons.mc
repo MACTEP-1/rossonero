@@ -142,6 +142,80 @@ module Icons {
         dc.drawLine(cx - r, cy, cx + r, cy);
     }
 
+    // Three more icons for the "second hand / move bar / sunrise-sunset /
+    // step ring" round's two new selectable fields - same pre-shipping
+    // actual-size check as the six above (see verify/new_badge_fields.png
+    // and verify/sun_icons_v2_zoomed.png), not just eyeballed at full size.
+
+    // 5-bar ascending chart, filled up to `level` (0-5, Garmin's own
+    // MOVE_BAR_LEVEL_MIN/MAX range for ActivityMonitor.Info.moveBarLevel -
+    // see View.mc's moveBarText()). Unfilled bars are outline-only rather
+    // than a second dim color, matching every other icon in this file
+    // (all take a single `color` - only drawBattery needs a second color,
+    // passed from the call site instead of hardcoded here).
+    function drawMoveBar(dc as Graphics.Dc, x as Lang.Numeric, y as Lang.Numeric, size as Lang.Numeric, level as Lang.Number, color as Lang.Number) as Void {
+        dc.setColor(color, Graphics.COLOR_TRANSPARENT);
+        var barW = size * 0.15;
+        var gap = size * 0.06;
+        var baseY = y + size;
+        var heights = [0.35, 0.5, 0.65, 0.8, 1.0];
+        var i = 0;
+        while (i < 5) {
+            var bx = x + i * (barW + gap);
+            var bh = size * 0.55 * heights[i];
+            if (i < level) {
+                dc.fillRectangle(bx, baseY - bh, barW, bh);
+            } else {
+                dc.setPenWidth(1);
+                dc.drawRectangle(bx, baseY - bh, barW, bh);
+            }
+            i += 1;
+        }
+    }
+
+    // Shared horizon-line-plus-sun motif for drawSunrise/drawSunset, direction
+    // told apart by a bold arrow to the right (up for sunrise, down for
+    // sunset) rather than by anything above/below the sun itself - an
+    // earlier version stacked a thin arrow directly above a small sun and it
+    // was unreadable at ~17px real badge-icon size (see
+    // verify/new_badge_fields.png's first version vs
+    // verify/sun_icons_v2_zoomed.png's fix). Not a real physical horizon -
+    // see View.mc's sunriseText()/sunsetText() for what these fields
+    // actually compute and the honest caveats around it (needs a location,
+    // which a watch face may not have).
+    function drawSunHorizon(dc as Graphics.Dc, x as Lang.Numeric, y as Lang.Numeric, size as Lang.Numeric, color as Lang.Number, rising as Lang.Boolean) as Void {
+        dc.setColor(color, Graphics.COLOR_TRANSPARENT);
+        var horizonY = y + size * 0.62;
+        dc.setPenWidth(2);
+        dc.drawLine(x + size * 0.02, horizonY, x + size * 0.62, horizonY);
+        var sunR = size * 0.22;
+        var scx = x + size * 0.32;
+        dc.fillCircle(scx, horizonY, sunR);
+
+        var ax = x + size * 0.82;
+        if (rising) {
+            dc.fillPolygon([
+                [ax, y + size * 0.05],
+                [ax - size * 0.16, y + size * 0.42],
+                [ax + size * 0.16, y + size * 0.42]
+            ]);
+        } else {
+            dc.fillPolygon([
+                [ax, y + size * 0.42],
+                [ax - size * 0.16, y + size * 0.05],
+                [ax + size * 0.16, y + size * 0.05]
+            ]);
+        }
+    }
+
+    function drawSunrise(dc as Graphics.Dc, x as Lang.Numeric, y as Lang.Numeric, size as Lang.Numeric, color as Lang.Number) as Void {
+        drawSunHorizon(dc, x, y, size, color, true);
+    }
+
+    function drawSunset(dc as Graphics.Dc, x as Lang.Numeric, y as Lang.Numeric, size as Lang.Numeric, color as Lang.Number) as Void {
+        drawSunHorizon(dc, x, y, size, color, false);
+    }
+
     // drawSoccerBall() removed: after three rounds of this hand-drawn
     // vector version all looking wrong once actually rendered (a flower,
     // a pinwheel, then something that read as a spider), the ball is now

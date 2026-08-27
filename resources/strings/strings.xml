@@ -22,6 +22,11 @@
     <string id="FieldStress">Stress</string>
     <string id="FieldTemperature">Temperature (needs connected phone)</string>
     <string id="FieldWorldClock">World clock (see World Clock Offset)</string>
+    <string id="FieldMoveBar">Move bar (inactivity, 0-5)</string>
+    <string id="FieldSunrise">Sunrise (needs location - see README)</string>
+    <string id="FieldSunset">Sunset (needs location - see README)</string>
+
+    <string id="SettingShowStepRing">Show step-goal ring (Digital clock style only)</string>
 
     <string id="SettingWorldClockOffset">World clock offset (whole hours from UTC - only matters if a circle above is set to World Clock)</string>
     <string id="UtcM12">UTC-12</string>
