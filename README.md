@@ -12,6 +12,40 @@ projects in this set: written without access to the SDK compiler or a
 real/simulated device - treat as a carefully-reasoned first draft, not
 tested software.
 
+## Eleventh round: an analog clock style option
+
+You asked whether an analog watch option could be added to all three
+projects. Scoped this deliberately narrow when asked: only the time
+element itself switches (new Settings > Clock Style: Digital/Analog) -
+the date row, the 3 stat badges, and the battery readout all stay exactly
+where they are. Hour and minute hands only, no seconds hand - your call,
+and it also means this needed zero new burn-in consideration: no extra
+per-second redraw, awake or asleep, and the system's own once-a-minute
+always-on refresh is already exactly the resolution this needs.
+
+The hands pivot from the screen's true center (`w*0.5, h*0.5`), not from
+`TIME_Y` where the digital text sits - `TIME_Y` is deliberately offset
+upward from center to leave room for the stat badges below it, so an
+analog clock centered there would either need its own layout pass or
+accept some visual crossover near the date/badges depending on the time
+of day. You picked the smaller, isolated change over a bigger layout
+redesign, so that crossover is an accepted tradeoff, not an oversight.
+
+Verified the actual hand-angle math (which direction is "12 o'clock,"
+which way is clockwise, does the hour hand creep between hour marks as
+minutes pass) with a quick Python/PIL render at five test times (10:10,
+3:45, 12:00, 6:30, 9:15) before writing the Monkey C - same
+verify-before-shipping habit as everywhere else in this project. All five
+came out correct, including the one non-obvious case: at exactly 12:00:00
+the hour and minute hands point the same direction, so the shorter hour
+hand is fully hidden behind the longer minute hand drawn on top of it -
+that's correct clock behavior, not a bug, and worth knowing so it doesn't
+look like a missing hand if you spot it.
+
+Also added to the on-device Customize menu (5th item, "Clock style") for
+the same reason the rest of that menu exists - test it without needing
+the phone-based Settings path.
+
 ## Tenth round: on-device "Customize" settings, no phone needed
 
 You noticed some of your other installed watch faces show a gear icon/

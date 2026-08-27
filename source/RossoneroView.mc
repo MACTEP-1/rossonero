@@ -299,8 +299,15 @@ class RossoneroView extends WatchUi.WatchFace {
     }
 
     // ---- Time: hour in fg white, colon+minute in accent red ---------------
+    // or an analog hour/minute-hand clock, per Settings > Clock Style.
 
     function drawTime(dc as Graphics.Dc, w as Lang.Number, h as Lang.Number, awake as Lang.Boolean) as Void {
+        var clockStyle = Properties.getValue("ClockStyle") as Lang.Number?;
+        if (clockStyle != null && clockStyle == 1) {
+            drawAnalogTime(dc, w, h, awake);
+            return;
+        }
+
         var clockTime = System.getClockTime();
         var hour = clockTime.hour;
         if (!System.getDeviceSettings().is24Hour) {
@@ -331,6 +338,68 @@ class RossoneroView extends WatchUi.WatchFace {
         dc.drawText(startX, y, Graphics.FONT_NUMBER_HOT, hourStr, Graphics.TEXT_JUSTIFY_LEFT);
         dc.setColor(accentColor, Graphics.COLOR_TRANSPARENT);
         dc.drawText(startX + hourWidth, y, Graphics.FONT_NUMBER_HOT, colonStr + minStr, Graphics.TEXT_JUSTIFY_LEFT);
+    }
+
+    // ---- Analog clock hands, drawn from the screen's TRUE center -----------
+    //
+    // Added as an alternative to the digital time readout (Settings >
+    // Clock Style). Deliberately minimal, per your own scope choice when
+    // asked: only the time element changes - the date row, the 3 stat
+    // badges, and the battery readout all stay exactly where they already
+    // are. The hands pivot from (w*0.5, h*0.5), the screen's actual
+    // center - NOT the same spot the digital time sits (TIME_Y is offset
+    // upward from center to leave room for the stat badges below it), so
+    // depending on the time of day a hand can visually pass near the date
+    // or the badges. That's the accepted tradeoff of keeping this a small,
+    // isolated change instead of redesigning the whole layout around a
+    // bigger analog face.
+    //
+    // Hour + minute hands only, no seconds hand - your call, and it also
+    // keeps this exactly as burn-in-safe as everything else on this face:
+    // no per-second redraw to worry about, awake or asleep. The system's
+    // own always-on refresh (about once a minute) is already exactly the
+    // resolution an hour/minute-only clock needs, so there's nothing extra
+    // to manage here versus the digital mode's 1Hz "Show Seconds" timer.
+    function drawAnalogTime(dc as Graphics.Dc, w as Lang.Number, h as Lang.Number, awake as Lang.Boolean) as Void {
+        var clockTime = System.getClockTime();
+        var hour12 = clockTime.hour % 12;
+        var min = clockTime.min;
+
+        var cx = w * 0.5;
+        var cy = h * 0.5;
+        var hourLen = w * 0.20;
+        var minLen = w * 0.32;
+
+        var minuteAngle = min * 6.0;
+        var hourAngle = hour12 * 30.0 + min * 0.5;
+
+        // Same dimmed asleep values as the digital mode's fgColor/
+        // accentColor above - already tuned once this session for the
+        // AMOLED burn-in luminance budget, reused as-is rather than
+        // picking new numbers.
+        var fgColor = awake ? FG : 0xdddddd;
+        var accentColor = awake ? ACCENT : 0x996666;
+
+        dc.setColor(fgColor, Graphics.COLOR_TRANSPARENT);
+        dc.setPenWidth(4);
+        drawClockHand(dc, cx, cy, hourAngle, hourLen);
+
+        dc.setColor(accentColor, Graphics.COLOR_TRANSPARENT);
+        dc.setPenWidth(3);
+        drawClockHand(dc, cx, cy, minuteAngle, minLen);
+
+        dc.fillCircle(cx, cy, w * 0.015);
+    }
+
+    // angleDeg is clockwise degrees from 12 o'clock (0 = straight up),
+    // matching how clock hands are conventionally described - converted
+    // here to screen coordinates (0deg => negative-y/up, 90deg => positive-
+    // x/right).
+    function drawClockHand(dc as Graphics.Dc, cx as Lang.Float, cy as Lang.Float, angleDeg as Lang.Float, length as Lang.Float) as Void {
+        var rad = Math.toRadians(angleDeg);
+        var x = cx + length * Math.sin(rad);
+        var y = cy - length * Math.cos(rad);
+        dc.drawLine(cx, cy, x, y);
     }
 
     // ---- Stats: fixed steps / heart rate / calories badges -----------------
