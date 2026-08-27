@@ -78,6 +78,16 @@ class RossoneroView extends WatchUi.WatchFace {
     const TICK_LEN_MAJOR = 0.032;
     const TICK_MAJOR_EVERY = 5;
 
+    // Hour numbers for Analog clock style, reusing the perimeter tick
+    // ring's own radius rather than tuning a second one from scratch.
+    // Skips "12" on purpose - the top icon already occupies that spot,
+    // and a real PIL-rendered mockup (verify/analog_dial_check.py) showed
+    // the "12" text and the icon's bottom edge only ~0.01 apart, too
+    // tight to keep. The same mockup is why the font is FONT_XTINY:
+    // FONT_TINY's wider "4"/"5"/"7"/"8" glyphs landed right on top of the
+    // side stat badges at this radius; the smaller font clears them.
+    const HOUR_NUM_RADIUS = 0.46;
+
     const FG = 0xf5f5f5;
     const DIM = 0xd8b8b8;
     const ACCENT = 0xe23b3b;
@@ -380,26 +390,73 @@ class RossoneroView extends WatchUi.WatchFace {
         var fgColor = awake ? FG : 0xdddddd;
         var accentColor = awake ? ACCENT : 0x996666;
 
+        // Hour-number ring is awake-only, like drawStripes()/
+        // drawPerimeterTicks() above - 11 lit numerals held on screen for
+        // up to a minute at a time in always-on mode is a meaningfully
+        // bigger lit area than the hands alone, so it follows the same
+        // AMOLED burn-in reasoning already applied elsewhere on this face.
+        if (awake) {
+            drawHourNumbers(dc, w, h);
+        }
+
         dc.setColor(fgColor, Graphics.COLOR_TRANSPARENT);
-        dc.setPenWidth(4);
-        drawClockHand(dc, cx, cy, hourAngle, hourLen);
+        drawHandPolygon(dc, cx, cy, hourAngle, hourLen, w * 0.022, hourLen * 0.18);
 
         dc.setColor(accentColor, Graphics.COLOR_TRANSPARENT);
-        dc.setPenWidth(3);
-        drawClockHand(dc, cx, cy, minuteAngle, minLen);
+        drawHandPolygon(dc, cx, cy, minuteAngle, minLen, w * 0.015, minLen * 0.15);
 
-        dc.fillCircle(cx, cy, w * 0.015);
+        // Hub cap: filled center plus a thin outline ring in the other
+        // hand's color - a small polish over the original plain fillCircle,
+        // same idea as a real watch's center cap.
+        dc.setColor(fgColor, Graphics.COLOR_TRANSPARENT);
+        dc.fillCircle(cx, cy, w * 0.022);
+        dc.setColor(accentColor, Graphics.COLOR_TRANSPARENT);
+        dc.setPenWidth(2);
+        dc.drawCircle(cx, cy, w * 0.022);
     }
 
-    // angleDeg is clockwise degrees from 12 o'clock (0 = straight up),
-    // matching how clock hands are conventionally described - converted
-    // here to screen coordinates (0deg => negative-y/up, 90deg => positive-
-    // x/right).
-    function drawClockHand(dc as Graphics.Dc, cx as Lang.Float, cy as Lang.Float, angleDeg as Lang.Float, length as Lang.Float) as Void {
+    // Tapered "dauphine"-style hand: wide near the pivot, pointed at the
+    // tip, with a small tail poking out the back like a real hand's
+    // counterweight - replaces the original plain drawLine() stroke.
+    // angleDeg is clockwise degrees from 12 o'clock (0 = straight up).
+    // Built as a single 4-point fillPolygon: baseLeft -> tip -> baseRight
+    // -> tail. Verified visually via verify/analog_dial_check.py (renders
+    // this exact shape at 5 test times) before writing this - the plain-
+    // line version was checked the same way earlier this session.
+    function drawHandPolygon(dc as Graphics.Dc, cx as Lang.Float, cy as Lang.Float, angleDeg as Lang.Float, length as Lang.Float, halfWidth as Lang.Float, tailLen as Lang.Float) as Void {
         var rad = Math.toRadians(angleDeg);
-        var x = cx + length * Math.sin(rad);
-        var y = cy - length * Math.cos(rad);
-        dc.drawLine(cx, cy, x, y);
+        var dirX = Math.sin(rad);
+        var dirY = -Math.cos(rad);
+        var perpX = Math.cos(rad);
+        var perpY = Math.sin(rad);
+
+        var tip = [cx + dirX * length, cy + dirY * length];
+        var baseLeft = [cx + perpX * halfWidth, cy + perpY * halfWidth];
+        var baseRight = [cx - perpX * halfWidth, cy - perpY * halfWidth];
+        var tail = [cx - dirX * tailLen, cy - dirY * tailLen];
+
+        dc.fillPolygon([baseLeft, tip, baseRight, tail]);
+    }
+
+    // 1 through 11 around the dial at HOUR_NUM_RADIUS - see that
+    // constant's comment for why "12" and this specific radius/font were
+    // chosen. Same angle convention as the hands (0deg = 12 o'clock,
+    // clockwise).
+    function drawHourNumbers(dc as Graphics.Dc, w as Lang.Number, h as Lang.Number) as Void {
+        var cx = w * 0.5;
+        var cy = h * 0.5;
+        var r = w * HOUR_NUM_RADIUS;
+
+        dc.setColor(DIM, Graphics.COLOR_TRANSPARENT);
+        var n = 1;
+        while (n <= 11) {
+            var rad = Math.toRadians(n * 30.0);
+            var x = cx + r * Math.sin(rad);
+            var y = cy - r * Math.cos(rad);
+            dc.drawText(x, y, Graphics.FONT_XTINY, n.format("%d"),
+                Graphics.TEXT_JUSTIFY_CENTER + Graphics.TEXT_JUSTIFY_VCENTER);
+            n += 1;
+        }
     }
 
     // ---- Stats: fixed steps / heart rate / calories badges -----------------

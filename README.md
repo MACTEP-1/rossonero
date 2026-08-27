@@ -12,6 +12,42 @@ projects in this set: written without access to the SDK compiler or a
 real/simulated device - treat as a carefully-reasoned first draft, not
 tested software.
 
+## Twelfth round: nicer analog hands, hour ticks + numbers around the dial
+
+You asked for the Analog clock style to look more like a real watch:
+better-looking hands than plain sticks, and hash marks with numbers
+around the circumference. Both done:
+
+- **Hands** are now a tapered "dauphine" shape (wide near the pivot,
+  pointed tip, a small tail poking out the back like a real hand's
+  counterweight) drawn as a single filled shape, instead of the original
+  plain line stroke. The center hub also picked up a thin outline ring
+  in the opposite hand's color, instead of a flat filled dot.
+- **Hour markers**: numbers 1 through 11 around the dial, reusing this
+  project's existing perimeter tick ring's radius rather than adding a
+  new one. "12" is skipped on purpose - the top soccer-ball icon already
+  marks that spot, and a real collision check (below) showed the "12"
+  text and the icon's bottom edge only about 1% of screen height apart,
+  too tight to keep both.
+
+The collision risk here was real, not hypothetical: this face already
+packs an icon, date, time, three stat badges, and a battery readout into
+a small vertical stack, and a first pass at the number ring landed the
+4/5/7/8 o'clock numbers right on top of the side stat badges. Rendered
+the whole dial with Python/PIL at the actual Venu 2 resolution (same
+verify-before-shipping approach used for the original hand-angle math,
+not committed to this repo - just a dev-time check) to check every
+number position against the icon, date, badges, and battery before
+settling on `FONT_XTINY` (small enough to clear the badges) and skipping
+"12". Checked at five test times again, not just one, since which stat
+badge is closest to trouble depends on the current time.
+
+The hour-number ring only draws when awake, same as the existing tick
+ring and stripe background - eleven lit numerals held on screen for up
+to a minute at a time in always-on mode would cost more of the AMOLED
+burn-in budget than this face can spare, so it follows the same
+awake-only pattern already used elsewhere here.
+
 ## Eleventh round: an analog clock style option
 
 You asked whether an analog watch option could be added to all three
