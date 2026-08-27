@@ -1,3 +1,11 @@
 # Rossonero Connect IQ project build file
 project.manifest = manifest.xml
 base.resourcePath = resources
+
+# Pulls in shared/SettingsMenu.mc from the sibling shared-src folder
+# (same folder milan-personal and santorini-sunset point at) alongside
+# this project's own source/ - see shared-src/SettingsMenu.mc's header
+# comment for why this exists. "source" here is the SDK's usual default,
+# spelled out explicitly because setting base.sourcePath at all
+# overrides that default rather than adding to it.
+base.sourcePath = source;../shared-src

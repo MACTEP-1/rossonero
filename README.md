@@ -12,6 +12,42 @@ projects in this set: written without access to the SDK compiler or a
 real/simulated device - treat as a carefully-reasoned first draft, not
 tested software.
 
+## Thirteenth round: SettingsMenu.mc moved to a shared source folder
+
+You pointed out that this project and santorini-sunset are essentially
+the same watch face under different skins - correct, and it's exactly
+why every settings-menu feature this session had to be hand-ported with
+`sed` three separate times. Rather than merging the two projects
+outright (which would have compiled your Santorini photo into this
+project's binary, and orphaned this project's existing Store Beta
+submission - see the conversation for the full tradeoff), the on-device
+`SettingsMenu.mc` - which was already byte-identical across all three
+projects except for a class-name prefix - now lives in
+`garmin/shared-src/SettingsMenu.mc`, a folder alongside (not inside) this
+project, milan-personal, and santorini-sunset. `monkey.jungle` pulls it
+in via `base.sourcePath = source;../shared-src`; `RossoneroApp.mc`'s
+`getSettingsView()` now references the shared, unprefixed
+`SettingsMenu`/`SettingsDelegate` classes instead of
+`RossoneroSettingsMenu`/`RossoneroSettingsDelegate`.
+
+**This means `garmin/shared-src/` needs its own git history** - it's a
+new sibling folder outside any of the three existing repos, not part of
+this one. It's a plain folder with its own local git repo now; whether
+you push it to a remote of its own is your call. **Practically**: from
+now on, edit `garmin/shared-src/SettingsMenu.mc` directly rather than
+this project's `source/` folder (which no longer has its own copy) when
+a Settings-menu change is needed - one edit, all three projects pick it
+up on their next build.
+
+This first pass only moved the settings menu, deliberately - it's the
+piece that was already 100% identical across projects, so the risk of
+this refactor breaking something was low. The rest of View.mc (drawing
+logic) still has real per-project differences (background, icon, tuned
+layout constants) baked in throughout, and unifying that into a shared
+base class would be a much bigger, riskier change to make without a
+compiler to verify it - not done here, worth a separate conversation if
+you want to go further.
+
 ## Twelfth round: nicer analog hands, hour ticks + numbers around the dial
 
 You asked for the Analog clock style to look more like a real watch:
@@ -428,4 +464,10 @@ source/
   RossoneroApp.mc            App entry point
   RossoneroView.mc           All drawing logic
   Icons.mc                   Small vector icons (steps/heart/flame/battery)
+
+../shared-src/                (sibling folder, NOT inside this project)
+  SettingsMenu.mc             On-device Customize menu - shared with
+                               milan-personal and santorini-sunset, see
+                               "Thirteenth round" above and its header
+                               comment. Pulled in via monkey.jungle.
 ```
