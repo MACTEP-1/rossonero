@@ -12,6 +12,81 @@ projects in this set: written without access to the SDK compiler or a
 real/simulated device - treat as a carefully-reasoned first draft, not
 tested software.
 
+## Sixteenth round: charging bolt, weather-condition icon, long-press to swap fields
+
+Three more additions, picked from a follow-up "what else could we add"
+brainstorm.
+
+**Charging bolt.** `System.Stats.charging` (confirmed real via Garmin's
+own Toybox.System.Stats docs) - a small amber lightning-bolt icon now
+shows next to the bottom battery readout, and as a corner badge on the
+Battery stat-badge circle if that's one of your selected fields. Mocked
+up in Python first at real badge-icon size and against the actual battery
+icon's footprint before writing any Monkey C (`verify/new_icons_v3_zoomed.png`,
+`verify/new_icons_v3_battery_badge.png`) - the corner-badge placement in
+particular needed checking since the battery icon isn't centered in its
+slot.
+
+**Weather-condition icon.** The Temperature field's icon now reflects
+actual current conditions instead of always showing a plain thermometer:
+`Weather.CurrentConditions.condition` returns one of ~54 documented
+`CONDITION_*` codes (full list fetched from Garmin's docs and
+cross-checked, not guessed), mapped down to 5 icon buckets - clear
+(sun), cloud, rain, snow/wintry mix, storm (also covers severe
+non-precipitation conditions like tornado/hurricane/high wind, which
+don't get their own glyph). This is a considered simplification, the
+same one any weather app's tiny status-bar icon makes - see
+`weatherIconCategory()` in RossoneroView.mc for the exact mapping. Falls
+back to the original thermometer icon if no current-conditions data is
+available at all (no phone paired, no location fix), same honesty as the
+existing "--" fallback text.
+
+**Long-press to swap fields.** You mentioned seeing this on another face:
+touch-and-hold anywhere on the watch face swaps the three stat-badge
+circles to a second, independently-configurable set of fields, instead
+of doing nothing (the physical-button hold still opens the Controls
+menu/carousel as normal - this is a screen touch-and-hold, a different
+gesture). Researched properly before implementing, since this is the
+first time any watch face in this project set receives live input at
+all (everything before this has been drawing-only):
+- `WatchUi.WatchFaceDelegate.onPress()` is the real API for this, but
+  needs **API 4.2.0+** and **touch-and-hold specifically** - a real forum
+  thread (forums.garmin.com/developer/connect-iq/f/discussion/5386)
+  confirms watch faces got zero input at all before 4.2.0, and that "a
+  small tap does not work," only a hold triggers the callback, which
+  matches exactly what you described.
+- **This meant a real, deliberate tradeoff**: bumping `minApiLevel` from
+  4.0.0 to 4.2.0 drops `vivoactive4` (API 3.3 only, per Garmin's own
+  compatible-devices table) from this project's device list. I flagged
+  this explicitly and you approved dropping it - see manifest.xml's
+  comment. Every other device in the list (Venu 2/2S, vivoactive5, fenix
+  7 series, epix 2, FR265/265s/965) is API 5.0+, comfortably clear.
+  **Because this is the Store Beta-submitted project, pushing this
+  change means a new build needs to go through the dashboard's
+  update-and-rescan process** - see the project status doc for what
+  that involves.
+- The alternate field set (`Field1Alt`/`Field2Alt`/`Field3Alt`, new
+  properties) defaults to Floors Climbed / Stress / Move Bar - different
+  from the primary set's steps/heart rate/calories defaults, so the
+  swap is immediately noticeable without you having to configure
+  anything first. Fully reconfigurable via a new "Long-press fields"
+  item in the on-device Customize menu (`shared-src/SettingsMenu.mc`) or
+  the phone-based Settings.
+- The toggle state is **not persisted** - it resets to the primary set
+  every time the app relaunches, the simplest behavior to reason about
+  without a compiler to check persistence edge cases against.
+- **Genuinely unverified**: `onPress()` only fires on touchscreen
+  devices (every device here qualifies), but I have no way to confirm
+  the actual on-device feel - how long a "hold" needs to be, whether it
+  conflicts with anything else - without your build. Flagged the same
+  way sunrise/sunset's location resolution was flagged last round: real,
+  researched API, but first-hand confirmation is still outstanding.
+
+New shared file: `shared-src/WatchFaceInputDelegate.mc` - duck-typed
+against a `toggleAltFields()` method so one copy works across all three
+projects' different View classes (see that file's own comment for why
+the `view` parameter is deliberately left untyped).
+
 ## Fifteenth round: seconds hand, move bar, sunrise/sunset, steps ring
 
 You asked for five things; four are new, one (stress) turned out to

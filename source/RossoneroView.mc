@@ -26,6 +26,12 @@ class RossoneroView extends WatchUi.WatchFace {
     private var _isAwake as Lang.Boolean = false;
     private var _tickTimer as Timer.Timer?;
     private var _ballIcon as Graphics.BitmapType?;
+    // Long-press-to-swap-fields state - toggled by WatchFaceInputDelegate.
+    // Deliberately NOT persisted (no Properties.setValue here): resets to
+    // the primary field set on every app relaunch, same behavior as most
+    // watch faces with a similar toggle and simplest to reason about
+    // without a compiler to check persistence edge cases against.
+    private var _showAltFields as Lang.Boolean = false;
 
     // ---- Layout constants (fractions of screen width/height) ------------
     // Second pass after seeing this run in the simulator: added a top icon
@@ -113,6 +119,10 @@ class RossoneroView extends WatchUi.WatchFace {
     const FG = 0xf5f5f5;
     const DIM = 0xd8b8b8;
     const ACCENT = 0xe23b3b;
+    // Amber, not red/green - reads clearly as "charging" against this
+    // project's red/black palette without colliding with ACCENT (used for
+    // plenty of non-charging things) or the step ring's green.
+    const CHARGE_COLOR = 0xffcc00;
 
     // Selectable stat-badge fields - numeric IDs match the Field1/Field2/
     // Field3 settings.xml list values exactly, so don't renumber these
@@ -176,6 +186,16 @@ class RossoneroView extends WatchUi.WatchFace {
 
     function onHide() as Void {
         stopTicking();
+    }
+
+    // Called by WatchFaceInputDelegate.onPress() (touch-and-hold anywhere
+    // on the face) - see shared-src/WatchFaceInputDelegate.mc for the API
+    // research (WatchFaceDelegate.onPress needs API 4.2.0+, touchscreen-
+    // only) and RossoneroApp.mc's getInitialView() for how this view gets
+    // wired to that delegate.
+    function toggleAltFields() as Void {
+        _showAltFields = !_showAltFields;
+        WatchUi.requestUpdate();
     }
 
     function onExitSleep() as Void {
@@ -545,12 +565,29 @@ class RossoneroView extends WatchUi.WatchFace {
     function drawStats(dc as Graphics.Dc, w as Lang.Number, h as Lang.Number) as Void {
         var info = ActivityMonitor.getInfo();
 
-        var field1 = Properties.getValue("Field1") as Lang.Number?;
-        var field2 = Properties.getValue("Field2") as Lang.Number?;
-        var field3 = Properties.getValue("Field3") as Lang.Number?;
-        if (field1 == null) { field1 = FIELD_STEPS; }
-        if (field2 == null) { field2 = FIELD_HEART; }
-        if (field3 == null) { field3 = FIELD_CALORIES; }
+        var field1;
+        var field2;
+        var field3;
+        if (_showAltFields) {
+            // Long-press "alternate" set - same defaults as shared-src/
+            // SettingsMenu.mc's ALT_FIELD*_DEFAULT constants (floors,
+            // stress, move bar); kept as separate literals here rather
+            // than importing them since View.mc doesn't otherwise depend
+            // on SettingsMenu.mc's internals.
+            field1 = Properties.getValue("Field1Alt") as Lang.Number?;
+            field2 = Properties.getValue("Field2Alt") as Lang.Number?;
+            field3 = Properties.getValue("Field3Alt") as Lang.Number?;
+            if (field1 == null) { field1 = FIELD_FLOORS; }
+            if (field2 == null) { field2 = FIELD_STRESS; }
+            if (field3 == null) { field3 = FIELD_MOVE_BAR; }
+        } else {
+            field1 = Properties.getValue("Field1") as Lang.Number?;
+            field2 = Properties.getValue("Field2") as Lang.Number?;
+            field3 = Properties.getValue("Field3") as Lang.Number?;
+            if (field1 == null) { field1 = FIELD_STEPS; }
+            if (field2 == null) { field2 = FIELD_HEART; }
+            if (field3 == null) { field3 = FIELD_CALORIES; }
+        }
 
         var cy = h * STATS_Y;
         var cyOuter = cy - h * STATS_OUTER_LIFT;
@@ -814,12 +851,34 @@ class RossoneroView extends WatchUi.WatchFace {
         } else if (fieldId == FIELD_ACTIVE_MIN) {
             Icons.drawActiveMinutes(dc, iconX, iconTopY, iconSize, ACCENT);
         } else if (fieldId == FIELD_BATTERY) {
-            var pct = System.getSystemStats().battery;
-            Icons.drawBattery(dc, iconX, iconTopY + iconSize * 0.25, iconSize, pct, ACCENT, ACCENT);
+            var stats = System.getSystemStats();
+            Icons.drawBattery(dc, iconX, iconTopY + iconSize * 0.25, iconSize, stats.battery, ACCENT, ACCENT);
+            // Corner charging badge - placement checked against the battery
+            // icon's own footprint in a PIL mockup first (both occupy the
+            // same badge, and the icon isn't centered) rather than assumed
+            // clear - see verify/new_icons_v3_battery_badge.png.
+            if (stats.charging) {
+                Icons.drawChargingBolt(dc, cx + r * 0.25, cy - r * 0.85, r * 0.30, CHARGE_COLOR);
+            }
         } else if (fieldId == FIELD_STRESS) {
             Icons.drawStress(dc, iconX, iconTopY, iconSize, ACCENT);
         } else if (fieldId == FIELD_TEMPERATURE) {
-            Icons.drawTemperature(dc, iconX, iconTopY, iconSize, ACCENT);
+            var cat = weatherIconCategory();
+            if (cat == 0) {
+                Icons.drawWeatherClear(dc, iconX, iconTopY, iconSize, ACCENT);
+            } else if (cat == 1) {
+                Icons.drawWeatherCloud(dc, iconX, iconTopY, iconSize, ACCENT);
+            } else if (cat == 2) {
+                Icons.drawWeatherRain(dc, iconX, iconTopY, iconSize, ACCENT);
+            } else if (cat == 3) {
+                Icons.drawWeatherSnow(dc, iconX, iconTopY, iconSize, ACCENT);
+            } else if (cat == 4) {
+                Icons.drawWeatherStorm(dc, iconX, iconTopY, iconSize, ACCENT);
+            } else {
+                // No current-conditions data available at all - fall back
+                // to the original plain thermometer rather than guessing.
+                Icons.drawTemperature(dc, iconX, iconTopY, iconSize, ACCENT);
+            }
         } else if (fieldId == FIELD_WORLD_CLOCK) {
             Icons.drawWorldClock(dc, iconX, iconTopY, iconSize, ACCENT);
         } else if (fieldId == FIELD_MOVE_BAR) {
@@ -868,11 +927,18 @@ class RossoneroView extends WatchUi.WatchFace {
     // feedback that this looked less tidy than the reference mockup's
     // battery readout.
     function drawBattery(dc as Graphics.Dc, w as Lang.Number, h as Lang.Number) as Void {
-        var battery = System.getSystemStats().battery;
+        var stats = System.getSystemStats();
+        var battery = stats.battery;
+        var charging = stats.charging;
         var text = battery.format("%d") + "%";
         var iconSize = w * 0.055;
         var textWidth = dc.getTextWidthInPixels(text, Graphics.FONT_XTINY);
-        var groupWidth = iconSize + w * 0.02 + textWidth;
+        // Charging bolt tacks onto the end of the same centered group
+        // (icon-gap-text) rather than floating independently, so the
+        // whole readout stays centered whether or not it's showing.
+        var boltSize = iconSize * 0.55;
+        var boltGap = charging ? w * 0.015 : 0;
+        var groupWidth = iconSize + w * 0.02 + textWidth + boltGap + (charging ? boltSize : 0);
         var x = w * 0.5 - groupWidth * 0.5;
         var battYCenter = h * BATTERY_Y;
 
@@ -880,6 +946,59 @@ class RossoneroView extends WatchUi.WatchFace {
         dc.setColor(DIM, Graphics.COLOR_TRANSPARENT);
         dc.drawText(x + iconSize + w * 0.02, battYCenter, Graphics.FONT_XTINY, text,
             Graphics.TEXT_JUSTIFY_LEFT + Graphics.TEXT_JUSTIFY_VCENTER);
+        if (charging) {
+            var boltX = x + iconSize + w * 0.02 + textWidth + boltGap;
+            Icons.drawChargingBolt(dc, boltX, battYCenter - boltSize * 0.5, boltSize, CHARGE_COLOR);
+        }
+    }
+
+    // Maps Weather.CurrentConditions.condition (one of ~54 CONDITION_*
+    // codes - confirmed via Garmin's own Toybox.Weather docs, full list
+    // fetched and cross-checked before writing this) down to one of 5 icon
+    // categories for the Temperature badge. Not a 1:1 mapping - severe/
+    // rare conditions (tornado, hurricane, sandstorm, volcanic ash, etc.)
+    // land in the closest visual bucket rather than getting their own
+    // glyph, same tradeoff any weather app's tiny status-bar icon makes.
+    // Returns -1 (fall back to the plain thermometer) if no current-
+    // conditions data is available at all, same "--"-style honesty as
+    // temperatureText()/sunriseText() already use elsewhere in this file.
+    function weatherIconCategory() as Lang.Number {
+        if (!(Toybox has :Weather)) { return -1; }
+        var conditions = Weather.getCurrentConditions();
+        if (conditions == null || conditions.condition == null) { return -1; }
+        var c = conditions.condition;
+        if (c == Weather.CONDITION_CLEAR || c == Weather.CONDITION_FAIR ||
+            c == Weather.CONDITION_PARTLY_CLEAR || c == Weather.CONDITION_MOSTLY_CLEAR) {
+            return 0; // clear
+        }
+        if (c == Weather.CONDITION_THUNDERSTORMS || c == Weather.CONDITION_SCATTERED_THUNDERSTORMS ||
+            c == Weather.CONDITION_CHANCE_OF_THUNDERSTORMS ||
+            c == Weather.CONDITION_TORNADO || c == Weather.CONDITION_HURRICANE ||
+            c == Weather.CONDITION_TROPICAL_STORM || c == Weather.CONDITION_WINDY ||
+            c == Weather.CONDITION_SQUALL) {
+            return 4; // storm (also covers severe non-precipitation conditions - no dedicated icon for those)
+        }
+        if (c == Weather.CONDITION_SNOW || c == Weather.CONDITION_LIGHT_SNOW || c == Weather.CONDITION_HEAVY_SNOW ||
+            c == Weather.CONDITION_CHANCE_OF_SNOW || c == Weather.CONDITION_FLURRIES ||
+            c == Weather.CONDITION_CLOUDY_CHANCE_OF_SNOW || c == Weather.CONDITION_WINTRY_MIX ||
+            c == Weather.CONDITION_LIGHT_RAIN_SNOW || c == Weather.CONDITION_HEAVY_RAIN_SNOW ||
+            c == Weather.CONDITION_RAIN_SNOW || c == Weather.CONDITION_CHANCE_OF_RAIN_SNOW ||
+            c == Weather.CONDITION_CLOUDY_CHANCE_OF_RAIN_SNOW || c == Weather.CONDITION_FREEZING_RAIN ||
+            c == Weather.CONDITION_SLEET || c == Weather.CONDITION_ICE_SNOW || c == Weather.CONDITION_ICE ||
+            c == Weather.CONDITION_HAIL) {
+            return 3; // snow / wintry mix
+        }
+        if (c == Weather.CONDITION_RAIN || c == Weather.CONDITION_LIGHT_RAIN || c == Weather.CONDITION_HEAVY_RAIN ||
+            c == Weather.CONDITION_SCATTERED_SHOWERS || c == Weather.CONDITION_LIGHT_SHOWERS ||
+            c == Weather.CONDITION_SHOWERS || c == Weather.CONDITION_HEAVY_SHOWERS ||
+            c == Weather.CONDITION_CHANCE_OF_SHOWERS || c == Weather.CONDITION_DRIZZLE ||
+            c == Weather.CONDITION_UNKNOWN_PRECIPITATION || c == Weather.CONDITION_CLOUDY_CHANCE_OF_RAIN) {
+            return 2; // rain / showers / drizzle
+        }
+        if (c == Weather.CONDITION_UNKNOWN) { return -1; }
+        // Everything else - partly/mostly cloudy, cloudy, hazy, foggy,
+        // misty, dusty, smoky, thin clouds, etc. - the plain cloud icon.
+        return 1; // cloud
     }
 
     function readHeartRate() as Lang.Number? {

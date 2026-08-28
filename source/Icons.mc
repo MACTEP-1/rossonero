@@ -1,5 +1,6 @@
 using Toybox.Graphics;
 using Toybox.Lang;
+using Toybox.Math;
 
 //
 // Icons.mc - small vector icons drawn with basic Graphics.Dc primitives only.
@@ -214,6 +215,96 @@ module Icons {
 
     function drawSunset(dc as Graphics.Dc, x as Lang.Numeric, y as Lang.Numeric, size as Lang.Numeric, color as Lang.Number) as Void {
         drawSunHorizon(dc, x, y, size, color, false);
+    }
+
+    // ---- Charging bolt + weather-condition icon set --------------------
+    //
+    // Two new features this round: a charging indicator (System.Stats.
+    // charging) shown next to the battery readout/badge, and a weather-
+    // condition icon that replaces the plain thermometer on the
+    // Temperature badge when Weather.CurrentConditions.condition is
+    // available (see RossoneroView.mc's weatherIconCategory() for the
+    // 54-code-to-5-icon mapping). Both mocked up in Python at real
+    // ~17px badge-icon size before being ported here - see
+    // verify/new_icons_v3_zoomed.png and verify/new_icons_v3_battery_badge.png
+    // - same discipline as every icon added to this project so far.
+
+    function drawChargingBolt(dc as Graphics.Dc, x as Lang.Numeric, y as Lang.Numeric, size as Lang.Numeric, color as Lang.Number) as Void {
+        dc.setColor(color, Graphics.COLOR_TRANSPARENT);
+        dc.fillPolygon([
+            [x + size * 0.55, y + size * 0.00],
+            [x + size * 0.15, y + size * 0.58],
+            [x + size * 0.42, y + size * 0.58],
+            [x + size * 0.30, y + size * 1.00],
+            [x + size * 0.85, y + size * 0.38],
+            [x + size * 0.55, y + size * 0.38]
+        ]);
+    }
+
+    // Shared cloud silhouette (two overlapping fillEllipse lobes + a
+    // fillRectangle base) reused by the cloud/rain/snow/storm icons below -
+    // Dc.fillEllipse(x, y, a, b) takes a CENTER point and two radii, per
+    // Garmin's own Dc API docs (confirmed before use, not assumed - this
+    // file hadn't used fillEllipse before now).
+    function drawCloudBase(dc as Graphics.Dc, x as Lang.Numeric, y as Lang.Numeric, size as Lang.Numeric, color as Lang.Number) as Void {
+        dc.setColor(color, Graphics.COLOR_TRANSPARENT);
+        var cy = y + size * 0.56;
+        dc.fillEllipse(x + size * 0.29, cy - size * 0.01, size * 0.19, size * 0.19);
+        dc.fillEllipse(x + size * 0.56, cy - size * 0.07, size * 0.22, size * 0.25);
+        dc.fillRectangle(x + size * 0.20, cy - size * 0.02, size * 0.52, size * 0.20);
+    }
+
+    function drawWeatherClear(dc as Graphics.Dc, x as Lang.Numeric, y as Lang.Numeric, size as Lang.Numeric, color as Lang.Number) as Void {
+        dc.setColor(color, Graphics.COLOR_TRANSPARENT);
+        var cx = x + size * 0.5;
+        var cy = y + size * 0.5;
+        var r = size * 0.26;
+        dc.fillCircle(cx, cy, r);
+        dc.setPenWidth(2);
+        var i = 0;
+        while (i < 8) {
+            var rad = Math.toRadians(i * 45.0);
+            var cosA = Math.cos(rad);
+            var sinA = Math.sin(rad);
+            dc.drawLine(cx + cosA * r * 1.35, cy + sinA * r * 1.35, cx + cosA * r * 1.85, cy + sinA * r * 1.85);
+            i += 1;
+        }
+    }
+
+    function drawWeatherCloud(dc as Graphics.Dc, x as Lang.Numeric, y as Lang.Numeric, size as Lang.Numeric, color as Lang.Number) as Void {
+        drawCloudBase(dc, x, y, size, color);
+    }
+
+    function drawWeatherRain(dc as Graphics.Dc, x as Lang.Numeric, y as Lang.Numeric, size as Lang.Numeric, color as Lang.Number) as Void {
+        drawCloudBase(dc, x, y, size * 0.85, color);
+        dc.setColor(color, Graphics.COLOR_TRANSPARENT);
+        dc.setPenWidth(2);
+        var baseY = y + size * 0.80;
+        var drops = [0.28, 0.48, 0.68];
+        var i = 0;
+        while (i < 3) {
+            var dx = drops[i];
+            dc.drawLine(x + size * dx, baseY, x + size * (dx - 0.06), baseY + size * 0.18);
+            i += 1;
+        }
+    }
+
+    function drawWeatherSnow(dc as Graphics.Dc, x as Lang.Numeric, y as Lang.Numeric, size as Lang.Numeric, color as Lang.Number) as Void {
+        drawCloudBase(dc, x, y, size * 0.85, color);
+        dc.setColor(color, Graphics.COLOR_TRANSPARENT);
+        var baseY = y + size * 0.85;
+        var r = size * 0.045;
+        var flakes = [0.30, 0.50, 0.70];
+        var i = 0;
+        while (i < 3) {
+            dc.fillCircle(x + size * flakes[i], baseY, r);
+            i += 1;
+        }
+    }
+
+    function drawWeatherStorm(dc as Graphics.Dc, x as Lang.Numeric, y as Lang.Numeric, size as Lang.Numeric, color as Lang.Number) as Void {
+        drawCloudBase(dc, x, y, size * 0.78, color);
+        drawChargingBolt(dc, x + size * 0.30, y + size * 0.58, size * 0.44, color);
     }
 
     // drawSoccerBall() removed: after three rounds of this hand-drawn

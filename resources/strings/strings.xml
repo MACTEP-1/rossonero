@@ -12,6 +12,13 @@
     <string id="SettingField2">Middle circle shows</string>
     <string id="SettingField3">Right circle shows</string>
 
+    <!-- Long-press "alternate" field pickers - same 13 options, shown
+         instead of Field1/2/3 while the long-press toggle is active (see
+         RossoneroView.mc's toggleAltFields()/_showAltFields). -->
+    <string id="SettingField1Alt">Left circle shows (long-press)</string>
+    <string id="SettingField2Alt">Middle circle shows (long-press)</string>
+    <string id="SettingField3Alt">Right circle shows (long-press)</string>
+
     <string id="FieldSteps">Steps</string>
     <string id="FieldHeartRate">Heart rate</string>
     <string id="FieldCalories">Calories</string>

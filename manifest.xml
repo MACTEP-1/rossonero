@@ -17,17 +17,29 @@
     name="@Strings.AppName"
     entry="RossoneroApp"
     launcherIcon="@Drawables.LauncherIcon"
-    minApiLevel="4.0.0">
-    <!-- Bumped from 3.3.0: the top-of-face soccer ball is now a bitmap
-         resource drawn with Dc.drawScaledBitmap (API 4.0.0), replacing
-         the hand-drawn vector version - see README.md. Every device in
-         the product list below is already CIQ4+, so this doesn't drop
-         support for any of them. -->
+    minApiLevel="4.2.0">
+    <!-- Bumped from 3.3.0 to 4.0.0: the top-of-face soccer ball is now a
+         bitmap resource drawn with Dc.drawScaledBitmap - see README.md.
+
+         Bumped again, 4.0.0 -> 4.2.0, for the long-press-to-swap-fields
+         feature: WatchUi.WatchFaceDelegate.onPress() (touch-and-hold)
+         needs API 4.2.0+, confirmed against Garmin's own docs and a real
+         forum thread (forums.garmin.com/developer/connect-iq/f/
+         discussion/5386) describing watch faces getting zero input at all
+         before this level. REAL, DELIBERATE TRADEOFF, approved by you
+         after being asked directly: this drops vivoactive4 (API 3.3 only,
+         per Garmin's own compatible-devices table) from the product list
+         below - every other device here (Venu 2/2S, vivoactive5, fenix 7
+         series, epix 2, FR265/265s/965) is already API 5.0+, comfortably
+         clear of 4.2.0. Since this is the Store-submittable project with
+         a pending Beta listing, this manifest change will need to be
+         pushed as an update through the Store dashboard for the Beta
+         listing to reflect it - see the project status doc's "Beta
+         status" section for how that update-and-rescan process works. -->
 
     <iq:products>
       <iq:product id="venu2"/>
       <iq:product id="venu2s"/>
-      <iq:product id="vivoactive4"/>
       <iq:product id="vivoactive5"/>
       <iq:product id="fenix7"/>
       <iq:product id="fenix7s"/>

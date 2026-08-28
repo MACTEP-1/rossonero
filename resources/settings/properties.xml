@@ -13,6 +13,16 @@
     <property id="Field2" type="number">1</property>
     <property id="Field3" type="number">2</property>
 
+    <!-- Long-press "alternate" field set - what the 3 circles switch to
+         on a touch-and-hold (see RossoneroView.mc's toggleAltFields()).
+         Defaults deliberately differ from Field1/2/3 above so the
+         long-press is immediately noticeable: 4=Floors Climbed 7=Stress
+         10=Move Bar (must match shared-src/SettingsMenu.mc's
+         ALT_FIELD*_DEFAULT constants). -->
+    <property id="Field1Alt" type="number">4</property>
+    <property id="Field2Alt" type="number">7</property>
+    <property id="Field3Alt" type="number">10</property>
+
     <!-- Whole-hour UTC offset for the World Clock field. Only matters if a
          circle is actually set to World Clock. -->
     <property id="WorldClockOffset" type="number">0</property>
