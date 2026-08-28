@@ -189,7 +189,7 @@ class RossoneroView extends WatchUi.WatchFace {
     }
 
     // Called by WatchFaceInputDelegate.onPress() (touch-and-hold anywhere
-    // on the face) - see shared-src/WatchFaceInputDelegate.mc for the API
+    // on the face) - see garmin-shared-src/WatchFaceInputDelegate.mc for the API
     // research (WatchFaceDelegate.onPress needs API 4.2.0+, touchscreen-
     // only) and RossoneroApp.mc's getInitialView() for how this view gets
     // wired to that delegate.
@@ -569,7 +569,7 @@ class RossoneroView extends WatchUi.WatchFace {
         var field2;
         var field3;
         if (_showAltFields) {
-            // Long-press "alternate" set - same defaults as shared-src/
+            // Long-press "alternate" set - same defaults as garmin-shared-src/
             // SettingsMenu.mc's ALT_FIELD*_DEFAULT constants (floors,
             // stress, move bar); kept as separate literals here rather
             // than importing them since View.mc doesn't otherwise depend

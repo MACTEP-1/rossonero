@@ -70,7 +70,7 @@ all (everything before this has been drawing-only):
   from the primary set's steps/heart rate/calories defaults, so the
   swap is immediately noticeable without you having to configure
   anything first. Fully reconfigurable via a new "Long-press fields"
-  item in the on-device Customize menu (`shared-src/SettingsMenu.mc`) or
+  item in the on-device Customize menu (`garmin-shared-src/SettingsMenu.mc`) or
   the phone-based Settings.
 - The toggle state is **not persisted** - it resets to the primary set
   every time the app relaunches, the simplest behavior to reason about
@@ -82,7 +82,7 @@ all (everything before this has been drawing-only):
   way sunrise/sunset's location resolution was flagged last round: real,
   researched API, but first-hand confirmation is still outstanding.
 
-New shared file: `shared-src/WatchFaceInputDelegate.mc` - duck-typed
+New shared file: `garmin-shared-src/WatchFaceInputDelegate.mc` - duck-typed
 against a `toggleAltFields()` method so one copy works across all three
 projects' different View classes (see that file's own comment for why
 the `view` parameter is deliberately left untyped).
@@ -199,18 +199,18 @@ project's binary, and orphaned this project's existing Store Beta
 submission - see the conversation for the full tradeoff), the on-device
 `SettingsMenu.mc` - which was already byte-identical across all three
 projects except for a class-name prefix - now lives in
-`garmin/shared-src/SettingsMenu.mc`, a folder alongside (not inside) this
+`garmin/garmin-shared-src/SettingsMenu.mc`, a folder alongside (not inside) this
 project, milan-personal, and santorini-sunset. `monkey.jungle` pulls it
-in via `base.sourcePath = source;../shared-src`; `RossoneroApp.mc`'s
+in via `base.sourcePath = source;../garmin-shared-src`; `RossoneroApp.mc`'s
 `getSettingsView()` now references the shared, unprefixed
 `SettingsMenu`/`SettingsDelegate` classes instead of
 `RossoneroSettingsMenu`/`RossoneroSettingsDelegate`.
 
-**This means `garmin/shared-src/` needs its own git history** - it's a
+**This means `garmin/garmin-shared-src/` needs its own git history** - it's a
 new sibling folder outside any of the three existing repos, not part of
 this one. It's a plain folder with its own local git repo now; whether
 you push it to a remote of its own is your call. **Practically**: from
-now on, edit `garmin/shared-src/SettingsMenu.mc` directly rather than
+now on, edit `garmin/garmin-shared-src/SettingsMenu.mc` directly rather than
 this project's `source/` folder (which no longer has its own copy) when
 a Settings-menu change is needed - one edit, all three projects pick it
 up on their next build.
@@ -641,7 +641,7 @@ source/
   RossoneroView.mc           All drawing logic
   Icons.mc                   Small vector icons (steps/heart/flame/battery)
 
-../shared-src/                (sibling folder, NOT inside this project)
+../garmin-shared-src/                (sibling folder, NOT inside this project)
   SettingsMenu.mc             On-device Customize menu - shared with
                                milan-personal and santorini-sunset, see
                                "Thirteenth round" above and its header
