@@ -119,6 +119,11 @@ class RossoneroView extends WatchUi.WatchFace {
     const FG = 0xf5f5f5;
     const DIM = 0xd8b8b8;
     const ACCENT = 0xe23b3b;
+    // Named so the new Moon Phase icon's "dark side" (drawn separately in
+    // Icons.mc) can be handed the exact same color the badge circle itself
+    // is filled with below, rather than a second hardcoded literal that
+    // could drift out of sync with it.
+    const BADGE_BG = 0x1a0000;
     // Amber, not red/green - reads clearly as "charging" against this
     // project's red/black palette without colliding with ACCENT (used for
     // plenty of non-charging things) or the step ring's green.
@@ -149,6 +154,9 @@ class RossoneroView extends WatchUi.WatchFace {
     const FIELD_MOVE_BAR = 10;
     const FIELD_SUNRISE = 11;
     const FIELD_SUNSET = 12;
+    // Pure date math (garmin-shared-src/MoonPhase.mc), no Weather/
+    // Positioning dependency unlike Sunrise/Sunset above.
+    const FIELD_MOONPHASE = 13;
 
     // Steps-progress ring: a second, inner ring of ticks (green fill vs a
     // dark unfilled track) showing steps/stepGoal. Digital clock style
@@ -642,6 +650,8 @@ class RossoneroView extends WatchUi.WatchFace {
             return sunriseText();
         } else if (fieldId == FIELD_SUNSET) {
             return sunsetText();
+        } else if (fieldId == FIELD_MOONPHASE) {
+            return moonPhaseText();
         }
         // FIELD_STEPS, and the fallback for any unrecognized value.
         var steps = (info.steps != null) ? info.steps : 0;
@@ -710,6 +720,13 @@ class RossoneroView extends WatchUi.WatchFace {
         }
         var moment = Weather.getSunset(loc, Time.now());
         return sunMomentText(moment);
+    }
+
+    // Pure date math (garmin-shared-src/MoonPhase.mc) - no location, no
+    // Weather permission, no null/"--" fallback needed at all, unlike
+    // every other field in this function.
+    function moonPhaseText() as Lang.String {
+        return moonPhaseEmoji(moonPhaseIndex());
     }
 
     // Shared formatting for sunriseText()/sunsetText() - same is24Hour
@@ -831,7 +848,7 @@ class RossoneroView extends WatchUi.WatchFace {
     // guessing a pixel height at all. Icon and number are now placed
     // symmetrically above/below the badge's vertical center instead.
     function drawStatBadge(dc as Graphics.Dc, cx as Lang.Float, cy as Lang.Float, r as Lang.Float, fieldId as Lang.Number, text as Lang.String) as Void {
-        dc.setColor(0x1a0000, Graphics.COLOR_TRANSPARENT);
+        dc.setColor(BADGE_BG, Graphics.COLOR_TRANSPARENT);
         dc.fillCircle(cx, cy, r);
         dc.setColor(ACCENT, Graphics.COLOR_TRANSPARENT);
         dc.setPenWidth(2);
@@ -889,6 +906,25 @@ class RossoneroView extends WatchUi.WatchFace {
             Icons.drawSunrise(dc, iconX, iconTopY, iconSize, ACCENT);
         } else if (fieldId == FIELD_SUNSET) {
             Icons.drawSunset(dc, iconX, iconTopY, iconSize, ACCENT);
+        } else if (fieldId == FIELD_MOONPHASE) {
+            var phase = moonPhaseIndex();
+            if (phase == 0) {
+                Icons.drawMoonNew(dc, iconX, iconTopY, iconSize, ACCENT, BADGE_BG);
+            } else if (phase == 1) {
+                Icons.drawMoonWaxingCrescent(dc, iconX, iconTopY, iconSize, ACCENT, BADGE_BG);
+            } else if (phase == 2) {
+                Icons.drawMoonFirstQuarter(dc, iconX, iconTopY, iconSize, ACCENT, BADGE_BG);
+            } else if (phase == 3) {
+                Icons.drawMoonWaxingGibbous(dc, iconX, iconTopY, iconSize, ACCENT, BADGE_BG);
+            } else if (phase == 4) {
+                Icons.drawMoonFull(dc, iconX, iconTopY, iconSize, ACCENT, BADGE_BG);
+            } else if (phase == 5) {
+                Icons.drawMoonWaningGibbous(dc, iconX, iconTopY, iconSize, ACCENT, BADGE_BG);
+            } else if (phase == 6) {
+                Icons.drawMoonLastQuarter(dc, iconX, iconTopY, iconSize, ACCENT, BADGE_BG);
+            } else {
+                Icons.drawMoonWaningCrescent(dc, iconX, iconTopY, iconSize, ACCENT, BADGE_BG);
+            }
         } else {
             Icons.drawSteps(dc, iconX, iconTopY, iconSize, ACCENT);
         }
