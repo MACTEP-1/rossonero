@@ -2,6 +2,24 @@ using Toybox.Application;
 using Toybox.Lang;
 using Toybox.WatchUi;
 
+// App version - shown in the on-device Customize menu's title (see
+// garmin-shared-src/SettingsMenu.mc) so a stale build is obvious at a
+// glance instead of only discoverable by comparing screenshots against
+// source, which has bitten this project before (santorini-sunset's
+// date-contrast fix looked "not applied" in a screenshot that actually
+// just predated the rebuild). Bump this on every push to the device or
+// the Store dashboard, using the same value in both places. Scheme:
+// MAJOR.MINOR.PATCH - MAJOR only for a real public-facing milestone
+// (e.g. going from Beta to full Store release), MINOR for a round that
+// adds a new field/feature, PATCH for a pure bug/visual fix. 1.0.0 is
+// the informal baseline (everything through the Moon Phase round);
+// 1.0.1 was the step-progress-ring rendering fix; 1.1.0 is this round -
+// the ring is now also shown in Analog mode (previously Digital-only),
+// a real behavior change so MINOR rather than PATCH. See the project
+// status doc's "Versioning introduced" section for the full scheme and
+// what to type into the Store dashboard on each submission.
+const APP_VERSION = "1.1.0";
+
 class RossoneroApp extends Application.AppBase {
     function initialize() {
         AppBase.initialize();

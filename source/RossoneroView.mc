@@ -638,7 +638,12 @@ class RossoneroView extends WatchUi.WatchFace {
         } else if (fieldId == FIELD_BATTERY) {
             return System.getSystemStats().battery.format("%d") + "%";
         } else if (fieldId == FIELD_STRESS) {
-            var stress = info.stressScore;
+            // FIX: stressScore is a device/API-dependent member of Info,
+            // not a guaranteed one - it's absent (not just null) on some
+            // devices, and accessing an absent member directly throws a
+            // runtime "Symbol Not Found" crash rather than returning null.
+            // Same "has" pattern as readHeartRate()'s guard below.
+            var stress = (info has :stressScore) ? info.stressScore : null;
             return (stress != null) ? stress.format("%d") : "--";
         } else if (fieldId == FIELD_TEMPERATURE) {
             return temperatureText();
@@ -754,11 +759,38 @@ class RossoneroView extends WatchUi.WatchFace {
     // proven correct in a real build rather than introducing dc.drawArc()'s
     // own separate angle convention (0deg=3 o'clock, counter-clockwise)
     // untested.
+    // Redesigned from 32 discrete tick-dashes to a continuous stroked
+    // ring, after real simulator testing (user screenshot) showed the
+    // dashed version sitting close enough to the outer TICK_RADIUS bezel
+    // ring (only 0.03 apart, with that ring's major ticks reaching almost
+    // to this ring's outer edge) that the two read as one cluttered
+    // "double hash" band rather than two distinct rings. Deliberately
+    // kept the exact same radial footprint as the old tick version
+    // (still governed by STEP_RING_RADIUS/STEP_RING_TICK_LEN below) -
+    // this is a rendering-style fix, not a layout change.
+    //
+    // Dc.drawArc(x, y, radius, arcDirection, startAngle, endAngle) -
+    // confirmed real Toybox.Graphics.Dc API via Garmin forum
+    // (x/y are the CENTER, angles in degrees, 0=3 o'clock/90=12
+    // o'clock, increasing COUNTER-clockwise - the opposite rotational
+    // sense from the "clock angle" convention (0=12 o'clock, clockwise)
+    // used for the hour/minute-hand math elsewhere in this file, so
+    // converted explicitly below rather than reused as-is). penWidth
+    // from setPenWidth() controls stroke thickness, same as every other
+    // line/arc draw in this file. A full background circle is drawn
+    // first in the track color, then the progress arc on top in green -
+    // avoids the classic drawArc degenerate case where a 100%-progress
+    // arc's start and end angle land on the same value and nothing
+    // draws; 100% is special-cased to a second full circle instead.
     function drawStepRing(dc as Graphics.Dc, w as Lang.Number, h as Lang.Number) as Void {
-        var clockStyle = Properties.getValue("ClockStyle") as Lang.Number?;
-        if (clockStyle != null && clockStyle == 1) {
-            return; // Analog - see the constant comment for why.
-        }
+        // Used to be Digital-only (Analog's tick ring + hour numbers +
+        // seconds hand were judged too crowded for the ring to read
+        // cleanly). User saw a mockup of Analog-with-ring (the arc
+        // visually running through the hour numerals, a real, flagged
+        // collision) and liked it anyway - now shows in both clock
+        // styles, governed solely by the existing ShowStepRing setting
+        // below. No separate Analog-specific toggle: same property,
+        // same on/off behavior in either mode.
         var showRing = Properties.getValue("ShowStepRing") as Lang.Boolean?;
         if (showRing != null && !showRing) {
             return;
@@ -775,25 +807,32 @@ class RossoneroView extends WatchUi.WatchFace {
 
         var cx = w * 0.5;
         var cy = h * 0.5;
-        var r = w * STEP_RING_RADIUS;
-        var tickLen = w * STEP_RING_TICK_LEN;
+        // Same band the old tick version occupied (r - tickLen to r) -
+        // an arc/circle is stroked along its centerline, so aim at the
+        // middle of that band and use the old tick length as the pen
+        // width to cover the identical footprint pixel-for-pixel.
+        var r = w * (STEP_RING_RADIUS - (STEP_RING_TICK_LEN * 0.5));
+        var ringWidth = (w * STEP_RING_TICK_LEN).toNumber();
+        if (ringWidth < 1) { ringWidth = 1; }
 
-        var i = 0;
-        while (i < STEP_RING_SEGMENTS) {
-            var angleDeg = i * (360.0 / STEP_RING_SEGMENTS);
-            var filled = (i.toFloat() / STEP_RING_SEGMENTS) <= progress;
-            var rad = Math.toRadians(angleDeg);
-            var dirX = Math.sin(rad);
-            var dirY = -Math.cos(rad);
-            var outerX = cx + dirX * r;
-            var outerY = cy + dirY * r;
-            var innerX = cx + dirX * (r - tickLen);
-            var innerY = cy + dirY * (r - tickLen);
+        dc.setColor(STEP_RING_TRACK, Graphics.COLOR_TRANSPARENT);
+        dc.setPenWidth(ringWidth);
+        dc.drawCircle(cx, cy, r);
 
-            dc.setColor(filled ? STEP_RING_GREEN : STEP_RING_TRACK, Graphics.COLOR_TRANSPARENT);
-            dc.setPenWidth(filled ? 3 : 2);
-            dc.drawLine(innerX, innerY, outerX, outerY);
-            i += 1;
+        if (progress <= 0.0) {
+            return; // Nothing walked yet - track only.
+        }
+
+        dc.setColor(STEP_RING_GREEN, Graphics.COLOR_TRANSPARENT);
+        dc.setPenWidth(ringWidth);
+        if (progress >= 1.0) {
+            dc.drawCircle(cx, cy, r);
+        } else {
+            var endAngle = 90.0 - (progress * 360.0);
+            while (endAngle < 0.0) {
+                endAngle += 360.0; // Normalize - kept simple/defensive.
+            }
+            dc.drawArc(cx, cy, r, Graphics.ARC_CLOCKWISE, 90.0, endAngle);
         }
     }
 
