@@ -18,7 +18,7 @@ using Toybox.WatchUi;
 // a real behavior change so MINOR rather than PATCH. See the project
 // status doc's "Versioning introduced" section for the full scheme and
 // what to type into the Store dashboard on each submission.
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
 
 class RossoneroApp extends Application.AppBase {
     function initialize() {
